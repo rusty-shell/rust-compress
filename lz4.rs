@@ -56,7 +56,11 @@ static BUF_SIZE: uint = 128 << 10;
 static FLUSH_SIZE: uint = 1 << 16;
 static MAGIC: u32 = 0x184d2204;
 
+/// A decoder of an underlying lz4 stream. This is the decompressor used to
+/// inflate an underlying stream.
 pub struct Decoder<R> {
+    /// This is the stream which is owned by this decoder. It may be moved out
+    /// of, but the operation would also invalidate the `Decoder` instance.
     r: R,
 
     priv state: State,

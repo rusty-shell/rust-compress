@@ -1,4 +1,5 @@
 #[deny(warnings)];
+#[deny(missing_doc)];
 
 extern mod extra;
 
