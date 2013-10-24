@@ -403,7 +403,7 @@ impl<R: io::Reader + io::Seek> io::Reader for Decoder<R> {
         out
     }
 
-    fn eof(&mut self) -> bool { fail!() }
+    fn eof(&mut self) -> bool { false }
 }
 
 #[cfg(test)]
