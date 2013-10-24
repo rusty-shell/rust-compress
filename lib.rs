@@ -1,3 +1,5 @@
+#[deny(warnings)];
+
 extern mod extra;
 
 //mod flate;

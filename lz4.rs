@@ -404,7 +404,6 @@ mod test {
     use std::rt::io::mem::BufReader;
     use std::rt::io::Reader;
     use std::rand;
-    use std::rand::Rng;
 
     fn test_decode(input: &[u8], output: &[u8]) {
         let mut d = Decoder::new(BufReader::new(input));
@@ -446,10 +445,9 @@ mod test {
         let input = include_bin!("data/test.lz4.1");
         let mut d = Decoder::new(BufReader::new(input));
         let mut out = ~[];
-        let mut rng = rand::task_rng();
         let mut buf = [0u8, ..40];
         loop {
-            match d.read(buf.mut_slice_to(rng.gen_range(1, 40u))) {
+            match d.read(buf.mut_slice_to(1 + rand::random::<uint>() % 40)) {
                 Some(n) => {
                     out.push_all(buf.slice_to(n));
                 }
