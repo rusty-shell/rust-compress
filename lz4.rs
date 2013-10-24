@@ -15,6 +15,11 @@ let stream = Path::new("path/to/file.lz4").open_reader(io::Open);
 let decompressed = l4z::Decoder::new(stream).read_to_end();
 ```
 
+# Credit
+
+This implementation is largely based on Branimir Karadžić's implementation which
+can be found at https://github.com/bkaradzic/go-lz4.
+
 */
 
 use std::rt::io;
