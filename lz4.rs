@@ -74,7 +74,7 @@ pub struct Decoder<R> {
     priv stream_checksum: bool,
 }
 
-impl<R: io::Reader + io::Seek> Decoder<R> {
+impl<R: io::Reader> Decoder<R> {
     /// Creates a new decoder which will decompress the LZ4-encoded stream
     /// which will be read from `r`. This decoder will consume ownership of the
     /// reader, but it is accessible via the `r` field on the object returned.
@@ -193,8 +193,7 @@ impl<R: io::Reader + io::Seek> Decoder<R> {
     fn exec(&mut self, mut state: State, buf: &mut [u8]) -> Option<uint> {
         let mut offset = 0;
         loop {
-            debug!("state: {:?} {:x} {:x} at {}", state, self.start, self.end,
-                   self.r.tell());
+            debug!("state: {:?} {:x} {:x}", state, self.start, self.end);
             match state {
                 StreamStart => {
                     match self.header() {
@@ -223,8 +222,7 @@ impl<R: io::Reader + io::Seek> Decoder<R> {
                         Some(i) => i,
                         None => return None,
                     };
-                    debug!("at: {:x} {} {:x}", self.r.tell(),
-                           self.remaining_bytes as int, code);
+                    debug!("at: {:x} {}", self.remaining_bytes as int, code);
 
                     // XXX: I/O errors
                     let len = match self.read_len(code >> 4) {
@@ -395,7 +393,7 @@ impl<R: io::Reader + io::Seek> Decoder<R> {
     }
 }
 
-impl<R: io::Reader + io::Seek> io::Reader for Decoder<R> {
+impl<R: io::Reader> io::Reader for Decoder<R> {
     fn read(&mut self, buf: &mut [u8]) -> Option<uint> {
         info!("reading {}", buf.len());
         let out = self.exec(self.state, buf);
