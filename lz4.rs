@@ -23,12 +23,13 @@ can be found at https://github.com/bkaradzic/go-lz4.
 */
 
 use std::rt::io;
-use std::rt::io::extensions::{ReaderUtil, ReaderByteConversions};
+use std::rt::io::extensions::{ReaderUtil, ReaderByteConversions,
+                              WriterByteConversions};
 use std::vec;
 use std::num;
 
 #[deriving(Eq)]
-enum State {
+enum DecoderState {
     StreamStart,
     BlockStart,
     BlockEnd,
@@ -63,7 +64,7 @@ pub struct Decoder<R> {
     /// of, but the operation would also invalidate the `Decoder` instance.
     r: R,
 
-    priv state: State,
+    priv state: DecoderState,
     priv end: uint,
     priv start: uint,
     priv buf: ~[u8],
@@ -89,6 +90,15 @@ impl<R: io::Reader> Decoder<R> {
             stream_checksum: false,
             remaining_bytes: 0,
         }
+    }
+
+    /// Resets all internal state for this decoder. Care should be taken when
+    /// using this method.
+    pub fn reset(&mut self) {
+        self.state = StreamStart;
+        self.start = 0;
+        self.end = 0;
+        self.remaining_bytes = 0;
     }
 
     fn inner_byte(&mut self) -> Option<u8> {
@@ -190,7 +200,7 @@ impl<R: io::Reader> Decoder<R> {
         return Consumed(in_output);
     }
 
-    fn exec(&mut self, mut state: State, buf: &mut [u8]) -> Option<uint> {
+    fn exec(&mut self, mut state: DecoderState, buf: &mut [u8]) -> Option<uint> {
         let mut offset = 0;
         loop {
             debug!("state: {:?} {:x} {:x}", state, self.start, self.end);
@@ -406,13 +416,86 @@ impl<R: io::Reader> io::Reader for Decoder<R> {
     }
 }
 
+enum EncoderState {
+    NothingWritten,
+    NewBlock,
+    Accumulate,
+}
+
+/// XXX: wut
+pub struct Encoder<W> {
+    w: W,
+
+    priv state: EncoderState,
+    priv buf: ~[u8],
+    priv pos: uint,
+}
+
+impl<W: io::Writer> Encoder<W> {
+    /// XXX: wut
+    pub fn new(w: W) -> Encoder<W> {
+        Encoder {
+            w: w,
+            state: NothingWritten,
+            buf: vec::from_elem(BUF_SIZE, 0u8),
+            pos: 0,
+        }
+    }
+
+    fn exec(&mut self, mut state: EncoderState, buf: &[u8]) {
+        loop {
+            match state {
+                NothingWritten => {
+                    self.w.write_le_u32_(MAGIC);
+                    // version 01, turn on block independence, but turn off
+                    // everything else (we have no checksums right now).
+                    self.w.write_u8_(0b01_100000);
+                    // Maximum block size is 256KB
+                    self.w.write_u8_(0b0_101_0000);
+                    // XXX: this checksum is just plain wrong.
+                    self.w.write_u8_(0);
+                    state = Accumulate;
+                }
+
+                Accumulate => {
+                    let amt = num::min(buf.len(), self.buf.len() - self.pos);
+                    assert!(amt > 0);
+                    {
+                        let dst = self.buf.mut_slice(self.pos, self.pos + amt);
+                        vec::bytes::copy_memory(dst, buf.slice_to(amt), amt);
+                    }
+
+                    if self.pos == self.buf.len() {
+                        state = NewBlock;
+                    } else {
+                        break
+                    }
+                }
+
+                NewBlock => {
+                }
+            }
+        }
+    }
+}
+
+impl<W: io::Writer> io::Writer for Encoder<W> {
+    fn write(&mut self, buf: &[u8]) {
+        self.exec(self.state, buf)
+    }
+
+    fn flush(&mut self) {
+    }
+}
+
 #[cfg(test)]
 mod test {
-    use super::Decoder;
+    use extra::test;
+    use std::rand;
+    use std::rt::io::Reader;
     use std::rt::io::extensions::ReaderUtil;
     use std::rt::io::mem::BufReader;
-    use std::rt::io::Reader;
-    use std::rand;
+    use super::Decoder;
 
     fn test_decode(input: &[u8], output: &[u8]) {
         let mut d = Decoder::new(BufReader::new(input));
@@ -466,5 +549,20 @@ mod test {
             }
         }
         assert!(out.as_slice() == include_bin!("data/test.txt"));
+    }
+
+    #[bench]
+    fn decompress_speed(bh: &mut test::BenchHarness) {
+        let input = include_bin!("data/test.lz4.9");
+        let mut d = Decoder::new(BufReader::new(input));
+        let mut output = [0u8, ..65536];
+        do bh.iter {
+            do 20.times {
+                d.r = BufReader::new(input);
+                d.reset();
+                d.read(output);
+            }
+        }
+        bh.bytes = input.len() as u64;
     }
 }
