@@ -403,7 +403,9 @@ impl<R: io::Reader + io::Seek> io::Reader for Decoder<R> {
         out
     }
 
-    fn eof(&mut self) -> bool { false }
+    fn eof(&mut self) -> bool {
+        self.state == Cleanup && self.start == self.end
+    }
 }
 
 #[cfg(test)]
@@ -439,6 +441,7 @@ mod test {
     fn one_byte_at_a_time() {
         let input = include_bin!("data/test.lz4.1");
         let mut d = Decoder::new(BufReader::new(input));
+        assert!(!d.eof());
         let mut out = ~[];
         loop {
             match d.read_byte() {
@@ -446,6 +449,7 @@ mod test {
                 None => break
             }
         }
+        assert!(d.eof());
         assert!(out.as_slice() == include_bin!("data/test.txt"));
     }
 
