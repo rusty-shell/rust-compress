@@ -28,339 +28,143 @@ use std::rt::io::extensions::{ReaderUtil, ReaderByteConversions,
 use std::vec;
 use std::num;
 
-#[deriving(Eq)]
-enum DecoderState {
-    StreamStart,
-    BlockStart,
-    BlockEnd,
-
-    // raw blocks of uncompressed data
-    RawBlock(u32),
-
-    // blocks of compressed data (no headers or checksums)
-    DataStart,
-    NeedsConsumption(u8, uint),
-    DecompressStart(u8),
-    Decompress(uint),
-
-    EndOfStream,
-    Cleanup,
-}
-
-enum ConsumptionResult {
-    KeepGoing(uint),
-    Consumed(uint),
-    SomethingBad,
-}
-
-static BUF_SIZE: uint = 128 << 10;
-static FLUSH_SIZE: uint = 1 << 16;
 static MAGIC: u32 = 0x184d2204;
 
-/// A decoder of an underlying lz4 stream. This is the decompressor used to
-/// inflate an underlying stream.
-pub struct Decoder<R> {
-    /// This is the stream which is owned by this decoder. It may be moved out
-    /// of, but the operation would also invalidate the `Decoder` instance.
-    r: R,
+pub struct BlockDecoder<'self> {
+    input: &'self [u8],
+    output: &'self mut ~[u8],
+    cur: uint,
 
-    priv state: DecoderState,
-    priv end: uint,
-    priv start: uint,
-    priv buf: ~[u8],
-    priv remaining_bytes: uint,
-
-    // metadata from the stream descriptor
-    priv blk_checksum: bool,
-    priv stream_checksum: bool,
+    start: uint,
+    end: uint,
 }
 
-impl<R: io::Reader> Decoder<R> {
-    /// Creates a new decoder which will decompress the LZ4-encoded stream
-    /// which will be read from `r`. This decoder will consume ownership of the
-    /// reader, but it is accessible via the `r` field on the object returned.
-    pub fn new(r: R) -> Decoder<R> {
-        Decoder {
-            r: r,
-            state: StreamStart,
-            start: 0,
-            end: 0,
-            buf: vec::from_elem(BUF_SIZE, 0u8),
-            blk_checksum: false,
-            stream_checksum: false,
-            remaining_bytes: 0,
-        }
-    }
-
-    /// Resets all internal state for this decoder. Care should be taken when
-    /// using this method.
-    pub fn reset(&mut self) {
-        self.state = StreamStart;
-        self.start = 0;
-        self.end = 0;
-        self.remaining_bytes = 0;
-    }
-
-    fn inner_byte(&mut self) -> Option<u8> {
-        match self.r.read_byte() {
-            Some(b) => {
-                self.remaining_bytes -= 1;
-                Some(b)
+impl<'self> BlockDecoder<'self> {
+    /// Decodes this block of data from 'input' to 'output', returning the
+    /// number of valid bytes in the output.
+    pub fn decode(&mut self) -> uint {
+        while self.cur < self.input.len() {
+            let code = self.bump();
+            debug!("block with code: {:x}", code);
+            // Extract a chunk of data from the input to the output.
+            {
+                let len = self.length(code >> 4);
+                debug!("consume len {}", len);
+                self.grow_output(self.end + len);
+                vec::bytes::copy_memory(self.output.mut_slice_from(self.end),
+                                        self.input.slice_from(self.cur), len);
+                self.end += len;
+                self.cur += len;
             }
-            None => None,
-        }
-    }
+            if self.cur == self.input.len() { break }
 
-    fn inner_u16(&mut self) -> u16 {
-        self.remaining_bytes -= 2;
-        self.r.read_le_u16_()
-    }
-
-    fn inner_read(&mut self, dst: &mut [u8]) -> Option<uint> {
-        match self.r.read(dst) {
-            Some(n) => {
-                self.remaining_bytes -= n;
-                Some(n)
+            // Read off the next i16 offset
+            {
+                let back = (self.bump() as uint) | ((self.bump() as uint) << 8);
+                debug!("found back {}", back);
+                self.start = self.end - back;
             }
-            None => None,
+
+            // Slosh around some bytes now
+            {
+                let mut len = self.length(code & 0xf);
+                let literal = self.end - self.start;
+                if literal < 4 {
+                    static DECR: [uint, ..4] = [0, 3, 2, 3];
+                    self.cp(4, DECR[literal]);
+                } else {
+                    len += 4;
+                }
+                self.cp(len, 0);
+            }
         }
+        return self.end;
     }
 
-    fn read_len(&mut self, code: u8) -> Option<uint> {
+    fn length(&mut self, code: u8) -> uint {
         let mut ret = code as uint;
-        assert!(code < 16);
         if code == 0xf {
             loop {
-                match self.inner_byte() {
-                    None => return None,
-                    Some(255) => ret += 255,
-                    Some(n) => {
-                        ret += n as uint;
-                        break
-                    }
-                }
+                let tmp = self.bump();
+                ret += tmp as uint;
+                if tmp != 0xff { break }
             }
         }
-        return Some(ret);
+        return ret;
     }
 
-    fn consume(&mut self, len: uint, dst: &mut [u8]) -> ConsumptionResult {
-        let in_output = self.flush(len, dst);
-        if self.end + len > self.buf.len() {
-            return KeepGoing(in_output);
-        }
-
-        let buf = unsafe {
-            use std::cast;
-            cast::transmute_copy(&self.buf.mut_slice(self.end, self.end + len))
-        };
-        match self.inner_read(buf) {
-            Some(n) => {
-                self.end += n;
-                Consumed(in_output)
-            }
-            None => SomethingBad
-        }
+    fn bump(&mut self) -> u8 {
+        let ret = self.input[self.cur];
+        self.cur += 1;
+        return ret;
     }
 
-    fn flush(&mut self, len: uint, dst: &mut [u8]) -> uint {
-        if self.end + len > self.buf.len() {
-            assert!(self.start > FLUSH_SIZE);
-            let s = self.start - FLUSH_SIZE;
-
-            // Copy bytes out into the destination
-            let fill = num::min(dst.len(), s);
-            info!("flushing out {}", fill);
-            vec::bytes::copy_memory(dst, self.buf, fill);
-
-            // Slide all the bytes back down in the internal buffer
-            for i in range(0, fill) {
-                self.buf[i] = self.buf[fill + i];
-            }
-
-            self.end -= fill;
-            self.start -= fill;
-            return fill;
-        }
-        return 0;
-    }
-
-    fn cp(&mut self, len: uint, decr: uint, dst: &mut [u8]) -> ConsumptionResult {
-        let in_output = self.flush(len, dst);
-        if self.end + len > self.buf.len() {
-            return KeepGoing(in_output);
-        }
-
+    fn cp(&mut self, len: uint, decr: uint) {
+        self.grow_output(self.end + len);
         for i in range(0, len) {
-            self.buf[self.end + i] = self.buf[self.start + i];
+            self.output[self.end + i] = self.output[self.start + i];
         }
 
         self.end += len;
         self.start += len - decr;
-        return Consumed(in_output);
     }
 
-    fn exec(&mut self, mut state: DecoderState, buf: &mut [u8]) -> Option<uint> {
-        let mut offset = 0;
-        loop {
-            debug!("state: {:?} {:x} {:x}", state, self.start, self.end);
-            match state {
-                StreamStart => {
-                    match self.header() {
-                        Some(()) => {}
-                        None => return None,
-                    }
-                    state = BlockStart;
-                }
+    fn grow_output(&mut self, target: uint) {
+        if self.output.len() < target {
+            debug!("growing to {}", target);
+            let target = target - self.output.len();
+            self.output.grow(target, &0);
+        }
+    }
+}
 
-                BlockStart => {
-                    state = match self.r.read_le_u32_() {
-                        0 => EndOfStream,
-                        n if n & 0x80000000 != 0 => RawBlock(n & 0x7fffffff),
-                        n => {
-                            self.remaining_bytes = n as uint;
-                            info!("bytes left {}", self.remaining_bytes);
-                            DataStart
-                        }
-                    }
-                }
+pub struct Decoder<R> {
+    r: R,
 
-                DataStart => {
-                    //info!("remaining: {}", self.remaining_bytes as int);
-                    assert!(self.remaining_bytes as int > 0);
-                    let code = match self.inner_byte() {
-                        Some(i) => i,
-                        None => return None,
-                    };
-                    debug!("at: {:x} {}", self.remaining_bytes as int, code);
+    priv temp: ~[u8],
+    priv output: ~[u8],
 
-                    // XXX: I/O errors
-                    let len = match self.read_len(code >> 4) {
-                        Some(l) => l, None => return None,
-                    };
-                    state = NeedsConsumption(code, len);
-                }
+    priv start: uint,
+    priv end: uint,
+    priv eof: bool,
 
-                NeedsConsumption(code, len) => {
-                    match self.consume(len, buf.mut_slice_from(offset)) {
-                        // XXX: I/O error
-                        SomethingBad => return None,
-                        KeepGoing(amt_written) => {
-                            self.state = state;
-                            return Some(amt_written + offset);
-                        }
-                        Consumed(amt_written) => {
-                            offset += amt_written;
-                            if self.remaining_bytes == 0 {
-                                state = BlockStart;
-                            } else {
-                                state = DecompressStart(code);
-                            }
-                        }
-                    }
-                }
+    priv header: bool,
+    priv blk_checksum: bool,
+    priv stream_checksum: bool,
+    priv max_block_size: uint,
+}
 
-                DecompressStart(code) => {
-                    // XXX: I/O errors
-                    let back = self.inner_u16();
-                    debug!("got back: {}", back);
-                    self.start = self.end - back as uint;
-
-                    let len = match self.read_len(code & 0xf) {
-                        Some(l) => l, None => return None,
-                    };
-
-                    state = Decompress(len);
-                }
-
-                Decompress(len) => {
-                    let literal = self.end - self.start;
-                    if literal < 4 {
-                        static DECR: [uint, ..4] = [0, 3, 2, 3];
-                        match self.cp(4, DECR[literal],
-                                      buf.mut_slice_from(offset)) {
-                            SomethingBad => unreachable!(),
-                            KeepGoing(amt_written) => {
-                                self.state = state;
-                                return Some(amt_written + offset);
-                            }
-                            Consumed(amt_written) => offset += amt_written,
-                        }
-                    } else {
-                        len += 4;
-                    }
-                    match self.cp(len, 0, buf.mut_slice_from(offset)) {
-                        SomethingBad => unreachable!(),
-                        KeepGoing(amt_written) => {
-                            self.state = state;
-                            return Some(amt_written + offset);
-                        }
-                        Consumed(amt_written) => {
-                            offset += amt_written;
-                            state = DataStart;
-                        }
-                    }
-                }
-
-                RawBlock(remaining) => {
-                    let dst = buf.mut_slice_from(offset);
-                    if dst.len() == 0 {
-                        self.state = state;
-                        return Some(offset);
-                    }
-                    if remaining == 0 {
-                        state = BlockEnd;
-                        continue
-                    }
-                    let amt = num::min(remaining as uint, dst.len());
-                    match self.r.read(dst.mut_slice(offset, offset + amt)) {
-                        Some(n) => {
-                            offset += n;
-                            state = RawBlock(remaining - n as u32);
-                        }
-                        None => return None
-                    }
-                }
-
-                BlockEnd => {
-                    // XXX: implement checksums
-                    if self.blk_checksum {
-                        let cksum = self.r.read_le_u32_();
-                        debug!("ignoring block cksum: {:?}", cksum);
-                    }
-                    state = BlockStart;
-                }
-
-                EndOfStream => {
-                    // XXX: implement checksums
-                    if self.stream_checksum {
-                        let cksum = self.r.read_le_u32_();
-                        debug!("ignoring stream checksum: {:?}", cksum);
-                    }
-                    state = Cleanup;
-                    self.start = 0;
-                }
-
-                Cleanup => {
-                    let dst = buf.mut_slice_from(offset);
-                    let src = self.buf.slice(self.start, self.end);
-                    let amt = num::min(dst.len(), src.len());
-                    if amt == 0 { return None }
-                    vec::bytes::copy_memory(dst, src, amt);
-                    self.start += amt;
-                    self.state = Cleanup;
-                    return Some(amt + offset);
-                }
-            }
+impl<R: io::Reader> Decoder<R> {
+    pub fn new(r: R) -> Decoder<R> {
+        Decoder {
+            r: r,
+            temp: ~[],
+            output: ~[],
+            header: false,
+            blk_checksum: false,
+            stream_checksum: false,
+            start: 0,
+            end: 0,
+            eof: false,
+            max_block_size: 0,
         }
     }
 
-    fn header(&mut self) -> Option<()> {
+    pub fn reset(&mut self) {
+        self.header = false;
+        self.eof = false;
+        self.start = 0;
+        self.end = 0;
+    }
+
+    fn read_header(&mut self) -> Option<()> {
         // Make sure the magic number is what's expected.
         if self.r.read_le_u32_() != MAGIC { return None }
 
-        let flg = match self.r.read_byte() { Some(i) => i, None => return None };
-        let bd = match self.r.read_byte() { Some(i) => i, None => return None };
+        let mut bits = [0, ..3];
+        if self.r.read(bits.mut_slice_to(2)).is_none() { return None }
+        let flg = bits[0];
+        let bd = bits[1];
 
         // bits 7/6, the version number. Right now this must be 1
         if (flg >> 6) != 0b01 { return None }
@@ -396,24 +200,99 @@ impl<R: io::Reader> Decoder<R> {
         debug!("max size: {}", max_block_size);
         debug!("stream size: {:?}", size);
 
+        self.max_block_size = max_block_size;
+
         // XXX: implement checksums
         let cksum = self.r.read_byte();
         debug!("ignoring header checksum: {:?}", cksum);
         return Some(());
     }
+
+    fn decode_block(&mut self) -> bool {
+        match self.r.read_le_u32_() {
+            // final block, we're done here
+            0 => return false,
+
+            // raw block to read
+            n if n & 0x80000000 != 0 => {
+                let amt = (n & 0x7fffffff) as uint;
+                if self.output.len() < amt {
+                    let grow = amt - self.output.len();
+                    self.output.grow(grow, &0);
+                }
+                match self.r.read(self.output.mut_slice_to(amt)) {
+                    Some(n) => assert_eq!(n, amt),
+                    None => fail!(),
+                }
+                self.start = 0;
+                self.end = amt;
+            }
+
+            // actual block to decompress
+            n => {
+                let n = n as uint;
+                if self.temp.len() < n {
+                    let grow = n - self.temp.len();
+                    self.temp.grow(grow, &0);
+                }
+                assert!(n <= self.temp.len());
+                match self.r.read(self.temp.mut_slice_to(n as uint)) {
+                    Some(i) => assert_eq!(n, i),
+                    None => fail!(),
+                }
+                let target = num::min(self.max_block_size, 4 * n / 3);
+                if self.output.len() < target {
+                    let grow = target - self.output.len();
+                    self.output.grow(grow, &0);
+                }
+                let mut decoder = BlockDecoder {
+                    input: self.temp.slice_to(n),
+                    output: &mut self.output,
+                    cur: 0,
+                    start: 0,
+                    end: 0,
+                };
+                self.start = 0;
+                self.end = decoder.decode();
+            }
+        }
+
+        if self.blk_checksum {
+            let cksum = self.r.read_le_u32_();
+            debug!("ignoring block checksum {:?}", cksum);
+        }
+        return true;
+    }
 }
 
 impl<R: io::Reader> io::Reader for Decoder<R> {
-    fn read(&mut self, buf: &mut [u8]) -> Option<uint> {
-        info!("reading {}", buf.len());
-        let out = self.exec(self.state, buf);
-        info!("got {:?}", out);
-        out
+    fn read(&mut self, dst: &mut [u8]) -> Option<uint> {
+        if self.eof { return None }
+        if !self.header {
+            self.read_header();
+            self.header = true;
+        }
+        let mut amt = dst.len();
+        let len = amt;
+
+        while amt > 0 {
+            if self.start == self.end {
+                if !self.decode_block() {
+                    self.eof = true;
+                    break;
+                }
+            }
+            let n = num::min(amt, self.end - self.start);
+            vec::bytes::copy_memory(dst.mut_slice_from(len - amt),
+                                    self.output.slice_from(self.start), n);
+            self.start += n;
+            amt -= n;
+        }
+
+        return Some(len - amt);
     }
 
-    fn eof(&mut self) -> bool {
-        self.state == Cleanup && self.start == self.end
-    }
+    fn eof(&mut self) -> bool { return self.eof }
 }
 
 enum EncoderState {
@@ -437,7 +316,7 @@ impl<W: io::Writer> Encoder<W> {
         Encoder {
             w: w,
             state: NothingWritten,
-            buf: vec::from_elem(BUF_SIZE, 0u8),
+            buf: vec::from_elem(10, 0u8),
             pos: 0,
         }
     }
@@ -557,11 +436,9 @@ mod test {
         let mut d = Decoder::new(BufReader::new(input));
         let mut output = [0u8, ..65536];
         do bh.iter {
-            do 20.times {
-                d.r = BufReader::new(input);
-                d.reset();
-                d.read(output);
-            }
+            d.r = BufReader::new(input);
+            d.reset();
+            d.read(output);
         }
         bh.bytes = input.len() as u64;
     }
