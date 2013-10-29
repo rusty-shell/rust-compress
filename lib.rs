@@ -1,3 +1,4 @@
+#[link(name = "compress")];
 #[deny(warnings)];
 #[deny(missing_doc)];
 

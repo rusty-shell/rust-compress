@@ -1,17 +1,15 @@
 /*!
 
-LZ4 Decompression
+LZ4 Decompression and Compression
 
-This module contains an implementation in Rust of decompression of LZ4-encoded
-streams. This is exposed as a standard `Reader` interface wrapping an
-underlying `Reader` interface. In this manner, the decompressor can be viewed
-as a stream. It maintains its own internal buffer, but the size of this is
-constant as the stream is read.
+This module contains an implementation in Rust of decompression and compression
+of LZ4-encoded streams. These are exposed as a standard `Reader` and `Writer`
+interfaces wrapping an underlying stream.
 
 # Example
 
 ```rust
-let stream = Path::new("path/to/file.lz4").open_reader(io::Open);
+let stream = Path::new("path/to/file.lz4");
 let decompressed = l4z::Decoder::new(stream).read_to_end();
 ```
 
@@ -23,6 +21,7 @@ can be found at https://github.com/bkaradzic/go-lz4.
 */
 
 use std::rt::io;
+use std::rt::io::Writer;
 use std::rt::io::extensions::{ReaderUtil, ReaderByteConversions,
                               WriterByteConversions};
 use std::vec;
@@ -30,7 +29,7 @@ use std::num;
 
 static MAGIC: u32 = 0x184d2204;
 
-pub struct BlockDecoder<'self> {
+struct BlockDecoder<'self> {
     input: &'self [u8],
     output: &'self mut ~[u8],
     cur: uint,
@@ -42,7 +41,7 @@ pub struct BlockDecoder<'self> {
 impl<'self> BlockDecoder<'self> {
     /// Decodes this block of data from 'input' to 'output', returning the
     /// number of valid bytes in the output.
-    pub fn decode(&mut self) -> uint {
+    fn decode(&mut self) -> uint {
         while self.cur < self.input.len() {
             let code = self.bump();
             debug!("block with code: {:x}", code);
@@ -118,7 +117,13 @@ impl<'self> BlockDecoder<'self> {
     }
 }
 
+/// This structure is used to decode a stream of LZ4 blocks. This wraps an
+/// internal reader which is read from when this decoder's read method is
+/// called.
 pub struct Decoder<R> {
+    /// The internally wrapped reader. This is exposed so it may be moved out
+    /// of. Note that if data is read from the reader while decoding is in
+    /// progress the output stream will get corrupted.
     r: R,
 
     priv temp: ~[u8],
@@ -135,6 +140,9 @@ pub struct Decoder<R> {
 }
 
 impl<R: io::Reader> Decoder<R> {
+    /// Creates a new decoder which will read data from the given stream. The
+    /// inner stream can be re-acquired by moving out of the `r` field of this
+    /// structure.
     pub fn new(r: R) -> Decoder<R> {
         Decoder {
             r: r,
@@ -150,6 +158,8 @@ impl<R: io::Reader> Decoder<R> {
         }
     }
 
+    /// Resets this decoder back to its initial state. Note that the underlying
+    /// stream is not seeked on or has any alterations performed on it.
     pub fn reset(&mut self) {
         self.header = false;
         self.eof = false;
@@ -216,14 +226,9 @@ impl<R: io::Reader> Decoder<R> {
             // raw block to read
             n if n & 0x80000000 != 0 => {
                 let amt = (n & 0x7fffffff) as uint;
-                if self.output.len() < amt {
-                    let grow = amt - self.output.len();
-                    self.output.grow(grow, &0);
-                }
-                match self.r.read(self.output.mut_slice_to(amt)) {
-                    Some(n) => assert_eq!(n, amt),
-                    None => fail!(),
-                }
+                self.output.truncate(0);
+                self.output.reserve(amt);
+                self.r.push_bytes(&mut self.output, amt);
                 self.start = 0;
                 self.end = amt;
             }
@@ -231,20 +236,13 @@ impl<R: io::Reader> Decoder<R> {
             // actual block to decompress
             n => {
                 let n = n as uint;
-                if self.temp.len() < n {
-                    let grow = n - self.temp.len();
-                    self.temp.grow(grow, &0);
-                }
-                assert!(n <= self.temp.len());
-                match self.r.read(self.temp.mut_slice_to(n as uint)) {
-                    Some(i) => assert_eq!(n, i),
-                    None => fail!(),
-                }
+                self.temp.truncate(0);
+                self.temp.reserve(n);
+                self.r.push_bytes(&mut self.temp, n);
+
                 let target = num::min(self.max_block_size, 4 * n / 3);
-                if self.output.len() < target {
-                    let grow = target - self.output.len();
-                    self.output.grow(grow, &0);
-                }
+                self.output.truncate(0);
+                self.output.reserve(target);
                 let mut decoder = BlockDecoder {
                     input: self.temp.slice_to(n),
                     output: &mut self.output,
@@ -295,75 +293,87 @@ impl<R: io::Reader> io::Reader for Decoder<R> {
     fn eof(&mut self) -> bool { return self.eof }
 }
 
-enum EncoderState {
-    NothingWritten,
-    NewBlock,
-    Accumulate,
-}
-
-/// XXX: wut
+/// This structure is used to compress a stream of bytes using the LZ4
+/// compression algorithm. This is a wrapper around an internal writer which
+/// bytes will be written to.
 pub struct Encoder<W> {
-    w: W,
-
-    priv state: EncoderState,
+    priv w: W,
     priv buf: ~[u8],
-    priv pos: uint,
+    priv tmp: ~[u8],
+    priv wrote_header: bool,
+    priv limit: uint,
 }
 
 impl<W: io::Writer> Encoder<W> {
-    /// XXX: wut
+    /// Creates a new encoder which will have its output written to the given
+    /// output stream. The output stream can be re-acquired by calling
+    /// `finish()`
     pub fn new(w: W) -> Encoder<W> {
         Encoder {
             w: w,
-            state: NothingWritten,
-            buf: vec::from_elem(10, 0u8),
-            pos: 0,
+            wrote_header: false,
+            buf: vec::with_capacity(1024),
+            tmp: ~[],
+            limit: 256 * 1024,
         }
     }
 
-    fn exec(&mut self, mut state: EncoderState, buf: &[u8]) {
-        loop {
-            match state {
-                NothingWritten => {
-                    self.w.write_le_u32_(MAGIC);
-                    // version 01, turn on block independence, but turn off
-                    // everything else (we have no checksums right now).
-                    self.w.write_u8_(0b01_100000);
-                    // Maximum block size is 256KB
-                    self.w.write_u8_(0b0_101_0000);
-                    // XXX: this checksum is just plain wrong.
-                    self.w.write_u8_(0);
-                    state = Accumulate;
-                }
-
-                Accumulate => {
-                    let amt = num::min(buf.len(), self.buf.len() - self.pos);
-                    assert!(amt > 0);
-                    {
-                        let dst = self.buf.mut_slice(self.pos, self.pos + amt);
-                        vec::bytes::copy_memory(dst, buf.slice_to(amt), amt);
-                    }
-
-                    if self.pos == self.buf.len() {
-                        state = NewBlock;
-                    } else {
-                        break
-                    }
-                }
-
-                NewBlock => {
-                }
-            }
+    fn encode_block(&mut self) {
+        self.tmp.truncate(0);
+        if self.compress() {
+            self.w.write_le_u32_(self.tmp.len() as u32);
+            self.w.write(self.tmp)
+        } else {
+            self.w.write_le_u32_((self.buf.len() as u32) | 0x80000000);
+            self.w.write(self.buf)
         }
+        self.buf.truncate(0);
+    }
+
+    fn compress(&mut self) -> bool {
+        false
+    }
+
+    /// This function is used to flag that this session of compression is done
+    /// with. The stream is finished up (final bytes are written), and then the
+    /// wrapped writer is returned.
+    pub fn finish(mut self) -> W {
+        self.flush();
+        self.write_le_u32_(0);
+        self.write_le_u32_(0); // XXX: this checksum is wrong
+        self.w
     }
 }
 
 impl<W: io::Writer> io::Writer for Encoder<W> {
-    fn write(&mut self, buf: &[u8]) {
-        self.exec(self.state, buf)
+    fn write(&mut self, mut buf: &[u8]) {
+        if !self.wrote_header {
+            self.w.write_le_u32_(MAGIC);
+            // version 01, turn on block independence, but turn off
+            // everything else (we have no checksums right now).
+            self.w.write_u8_(0b01_100000);
+            // Maximum block size is 256KB
+            self.w.write_u8_(0b0_101_0000);
+            // XXX: this checksum is just plain wrong.
+            self.w.write_u8_(0);
+            self.wrote_header = true;
+        }
+
+        while buf.len() > 0 {
+            let amt = num::min(self.limit - self.buf.len(), buf.len());
+            self.buf.push_all(buf.slice_to(amt));
+
+            if self.buf.len() == self.limit {
+                self.encode_block();
+            }
+            buf = buf.slice_from(amt);
+        }
     }
 
     fn flush(&mut self) {
+        if self.buf.len() > 0 {
+            self.encode_block();
+        }
     }
 }
 
@@ -371,10 +381,10 @@ impl<W: io::Writer> io::Writer for Encoder<W> {
 mod test {
     use extra::test;
     use std::rand;
-    use std::rt::io::Reader;
+    use std::rt::io::{Reader, Writer, Decorator};
     use std::rt::io::extensions::ReaderUtil;
-    use std::rt::io::mem::BufReader;
-    use super::Decoder;
+    use std::rt::io::mem::{BufReader, MemWriter};
+    use super::{Decoder, Encoder};
 
     fn test_decode(input: &[u8], output: &[u8]) {
         let mut d = Decoder::new(BufReader::new(input));
@@ -430,16 +440,34 @@ mod test {
         assert!(out.as_slice() == include_bin!("data/test.txt"));
     }
 
+    fn roundtrip(bytes: &[u8]) {
+        let mut e = Encoder::new(MemWriter::new());
+        e.write(bytes);
+        let encoded = e.finish().inner();
+
+        let mut d = Decoder::new(BufReader::new(encoded));
+        let decoded = d.read_to_end();
+        assert_eq!(decoded.as_slice(), bytes);
+    }
+
+    #[test]
+    fn some_roundtrips() {
+        roundtrip(bytes!("test"));
+        roundtrip(bytes!(""));
+        roundtrip(include_bin!("data/test.txt"));
+    }
+
     #[bench]
     fn decompress_speed(bh: &mut test::BenchHarness) {
         let input = include_bin!("data/test.lz4.9");
         let mut d = Decoder::new(BufReader::new(input));
         let mut output = [0u8, ..65536];
+        let mut output_size = 0;
         do bh.iter {
             d.r = BufReader::new(input);
             d.reset();
-            d.read(output);
+            output_size = d.read(output).unwrap();
         }
-        bh.bytes = input.len() as u64;
+        bh.bytes = output_size as u64;
     }
 }
