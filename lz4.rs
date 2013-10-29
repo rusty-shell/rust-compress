@@ -20,10 +20,7 @@ can be found at https://github.com/bkaradzic/go-lz4.
 
 */
 
-use std::rt::io;
-use std::rt::io::Writer;
-use std::rt::io::extensions::{ReaderUtil, ReaderByteConversions,
-                              WriterByteConversions};
+use std::rt::io::{Writer, Reader};
 use std::vec;
 use std::num;
 
@@ -139,7 +136,7 @@ pub struct Decoder<R> {
     priv max_block_size: uint,
 }
 
-impl<R: io::Reader> Decoder<R> {
+impl<R: Reader> Decoder<R> {
     /// Creates a new decoder which will read data from the given stream. The
     /// inner stream can be re-acquired by moving out of the `r` field of this
     /// structure.
@@ -169,7 +166,7 @@ impl<R: io::Reader> Decoder<R> {
 
     fn read_header(&mut self) -> Option<()> {
         // Make sure the magic number is what's expected.
-        if self.r.read_le_u32_() != MAGIC { return None }
+        if self.r.read_le_u32() != MAGIC { return None }
 
         let mut bits = [0, ..3];
         if self.r.read(bits.mut_slice_to(2)).is_none() { return None }
@@ -202,7 +199,7 @@ impl<R: io::Reader> Decoder<R> {
         // bits 3-0 are reserved
 
         // read off other portions of the stream
-        let size = if stream_size {Some(self.r.read_le_u64_())} else {None};
+        let size = if stream_size {Some(self.r.read_le_u64())} else {None};
         assert!(!preset_dictionary, "preset dictionaries not supported yet");
 
         debug!("blk: {}", self.blk_checksum);
@@ -219,7 +216,7 @@ impl<R: io::Reader> Decoder<R> {
     }
 
     fn decode_block(&mut self) -> bool {
-        match self.r.read_le_u32_() {
+        match self.r.read_le_u32() {
             // final block, we're done here
             0 => return false,
 
@@ -256,14 +253,14 @@ impl<R: io::Reader> Decoder<R> {
         }
 
         if self.blk_checksum {
-            let cksum = self.r.read_le_u32_();
+            let cksum = self.r.read_le_u32();
             debug!("ignoring block checksum {:?}", cksum);
         }
         return true;
     }
 }
 
-impl<R: io::Reader> io::Reader for Decoder<R> {
+impl<R: Reader> Reader for Decoder<R> {
     fn read(&mut self, dst: &mut [u8]) -> Option<uint> {
         if self.eof { return None }
         if !self.header {
@@ -304,7 +301,7 @@ pub struct Encoder<W> {
     priv limit: uint,
 }
 
-impl<W: io::Writer> Encoder<W> {
+impl<W: Writer> Encoder<W> {
     /// Creates a new encoder which will have its output written to the given
     /// output stream. The output stream can be re-acquired by calling
     /// `finish()`
@@ -321,10 +318,10 @@ impl<W: io::Writer> Encoder<W> {
     fn encode_block(&mut self) {
         self.tmp.truncate(0);
         if self.compress() {
-            self.w.write_le_u32_(self.tmp.len() as u32);
+            self.w.write_le_u32(self.tmp.len() as u32);
             self.w.write(self.tmp)
         } else {
-            self.w.write_le_u32_((self.buf.len() as u32) | 0x80000000);
+            self.w.write_le_u32((self.buf.len() as u32) | 0x80000000);
             self.w.write(self.buf)
         }
         self.buf.truncate(0);
@@ -339,23 +336,23 @@ impl<W: io::Writer> Encoder<W> {
     /// wrapped writer is returned.
     pub fn finish(mut self) -> W {
         self.flush();
-        self.write_le_u32_(0);
-        self.write_le_u32_(0); // XXX: this checksum is wrong
+        self.write_le_u32(0);
+        self.write_le_u32(0); // XXX: this checksum is wrong
         self.w
     }
 }
 
-impl<W: io::Writer> io::Writer for Encoder<W> {
+impl<W: Writer> Writer for Encoder<W> {
     fn write(&mut self, mut buf: &[u8]) {
         if !self.wrote_header {
-            self.w.write_le_u32_(MAGIC);
+            self.w.write_le_u32(MAGIC);
             // version 01, turn on block independence, but turn off
             // everything else (we have no checksums right now).
-            self.w.write_u8_(0b01_100000);
+            self.w.write_u8(0b01_100000);
             // Maximum block size is 256KB
-            self.w.write_u8_(0b0_101_0000);
+            self.w.write_u8(0b0_101_0000);
             // XXX: this checksum is just plain wrong.
-            self.w.write_u8_(0);
+            self.w.write_u8(0);
             self.wrote_header = true;
         }
 
@@ -382,7 +379,6 @@ mod test {
     use extra::test;
     use std::rand;
     use std::rt::io::{Reader, Writer, Decorator};
-    use std::rt::io::extensions::ReaderUtil;
     use std::rt::io::mem::{BufReader, MemWriter};
     use super::{Decoder, Encoder};
 
