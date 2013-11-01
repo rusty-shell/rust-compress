@@ -105,11 +105,18 @@ impl<'self> BlockDecoder<'self> {
         self.start += len - decr;
     }
 
+    // Extends the output vector to a target number of bytes (in total), but
+    // does not actually initialize the new data. The length of the vector is
+    // updated, but the bytes will all have undefined values. It is assumed that
+    // the next operation is to pave over these bytes (so the initialization is
+    // unnecessary).
     fn grow_output(&mut self, target: uint) {
-        if self.output.len() < target {
-            debug!("growing to {}", target);
-            let target = target - self.output.len();
-            self.output.grow(target, &0);
+        if self.output.capacity() < target {
+            debug!("growing {} to {}", self.output.capacity(), target);
+            self.output.reserve_at_least(target);
+        }
+        unsafe {
+            vec::raw::set_len(self.output, target);
         }
     }
 }
