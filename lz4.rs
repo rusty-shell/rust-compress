@@ -95,6 +95,7 @@ impl<'self> BlockDecoder<'self> {
         return ret;
     }
 
+    #[inline]
     fn cp(&mut self, len: uint, decr: uint) {
         self.grow_output(self.end + len);
         for i in range(0, len) {
@@ -110,6 +111,7 @@ impl<'self> BlockDecoder<'self> {
     // updated, but the bytes will all have undefined values. It is assumed that
     // the next operation is to pave over these bytes (so the initialization is
     // unnecessary).
+    #[inline]
     fn grow_output(&mut self, target: uint) {
         if self.output.capacity() < target {
             debug!("growing {} to {}", self.output.capacity(), target);
