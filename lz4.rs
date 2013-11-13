@@ -20,7 +20,6 @@ can be found at https://github.com/bkaradzic/go-lz4.
 
 */
 
-use std::rt::io::{Writer, Reader};
 use std::vec;
 use std::num;
 
@@ -387,8 +386,8 @@ impl<W: Writer> Writer for Encoder<W> {
 mod test {
     use extra::test;
     use std::rand;
-    use std::rt::io::{Reader, Writer, Decorator};
-    use std::rt::io::mem::{BufReader, MemWriter};
+    use std::io::Decorator;
+    use std::io::mem::{BufReader, MemWriter};
     use super::{Decoder, Encoder};
 
     fn test_decode(input: &[u8], output: &[u8]) {
