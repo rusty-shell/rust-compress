@@ -1,4 +1,4 @@
-#[link(name = "compress")];
+#[pkgid = "compress"];
 #[deny(warnings)];
 #[deny(missing_doc)];
 
