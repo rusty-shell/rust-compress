@@ -25,16 +25,16 @@ use std::num;
 
 static MAGIC: u32 = 0x184d2204;
 
-struct BlockDecoder<'self> {
-    input: &'self [u8],
-    output: &'self mut ~[u8],
+struct BlockDecoder<'a> {
+    input: &'a [u8],
+    output: &'a mut ~[u8],
     cur: uint,
 
     start: uint,
     end: uint,
 }
 
-impl<'self> BlockDecoder<'self> {
+impl<'a> BlockDecoder<'a> {
     /// Decodes this block of data from 'input' to 'output', returning the
     /// number of valid bytes in the output.
     fn decode(&mut self) -> uint {
