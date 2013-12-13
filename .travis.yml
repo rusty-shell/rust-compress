@@ -5,4 +5,5 @@ install:
   - sudo apt-get install rust-nightly
 script:
   - rustc --lib lib.rs --no-trans
+  - ls
   - rustc --test lib.rs && ./compress
