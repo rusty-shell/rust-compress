@@ -97,27 +97,6 @@ impl<'a> BlockDecoder<'a> {
     #[inline]
     fn cp(&mut self, len: uint, decr: uint) {
         self.grow_output(self.end + len);
-        //unsafe {
-        //    use std::ptr;
-        //    let p1 = vec::raw::to_ptr(self.output.slice_from(self.end)) as *mut u8;
-        //    let p2 = vec::raw::to_ptr(self.output.slice_from(self.start));
-        //    for i in range(0, len as int) {
-        //        *ptr::mut_offset(p1, i) = *ptr::offset(p2, i);
-        //    }
-        //}
-        //unsafe {
-        //    use std::cast;
-        //    let v1 = cast::transmute_copy(&self.output.mut_slice_from(self.end));
-        //    let v2 = cast::transmute_copy(&self.output.slice_from(self.start));
-        //    vec::bytes::copy_memory(v1, v2, len);
-        //}
-        //unsafe {
-        //    use std::unstable::intrinsics;
-        //    let p1 = vec::raw::to_ptr(self.output.slice_from(self.end));
-        //    let p2 = vec::raw::to_ptr(self.output.slice_from(self.start));
-        //    intrinsics::memmove64(p1 as *mut u8, p2, len as u64);
-        //}
-        //assert!(self.output.len() >= self.end + len);
         for i in range(0, len) {
             self.output[self.end + i] = self.output[self.start + i];
         }
