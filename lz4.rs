@@ -47,7 +47,7 @@ impl<'a> BlockDecoder<'a> {
                 debug!("consume len {}", len);
                 self.grow_output(self.end + len);
                 vec::bytes::copy_memory(self.output.mut_slice_from(self.end),
-                                        self.input.slice_from(self.cur), len);
+                                        self.input.slice(self.cur, self.cur + len));
                 self.end += len;
                 self.cur += len;
             }
@@ -117,7 +117,7 @@ impl<'a> BlockDecoder<'a> {
             self.output.reserve_at_least(target);
         }
         unsafe {
-            vec::raw::set_len(self.output, target);
+            self.output.set_len(target);
         }
     }
 }
@@ -287,7 +287,7 @@ impl<R: Reader> Reader for Decoder<R> {
             }
             let n = num::min(amt, self.end - self.start);
             vec::bytes::copy_memory(dst.mut_slice_from(len - amt),
-                                    self.output.slice_from(self.start), n);
+                                    self.output.slice(self.start, self.start + n));
             self.start += n;
             amt -= n;
         }
