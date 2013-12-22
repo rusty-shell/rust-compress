@@ -7,4 +7,4 @@ script:
   - rustc --lib lib.rs --no-trans
   - rustc --test lib.rs
   - ls
-  - ./compress
+  - ./lib
