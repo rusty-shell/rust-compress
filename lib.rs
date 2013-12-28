@@ -1,4 +1,4 @@
-#[pkgid = "compress"];
+#[crate_id = "compress"];
 #[deny(warnings)];
 #[deny(missing_doc)];
 
