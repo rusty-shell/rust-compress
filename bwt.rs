@@ -18,7 +18,7 @@ let decompressed = bwt::Decoder::new(stream,true).read_to_end();
 
 use std::{iter,num,vec};
 
-static MAGIC    : u32   = 0x22334455; //FIXME
+static MAGIC    : u32   = 0x74776272;	//=rbwt
 
 struct Radix    {
     freq    : [uint,..257],
@@ -26,29 +26,30 @@ struct Radix    {
 
 impl Radix  {
     /// create Radix sort instance
-    pub fn new() -> Radix   {
+    fn new() -> Radix   {
         Radix   {
             freq : [0,..257],
         }
     }
     
     /// reset counters
+    /// allows the struct to be re-used
     #[allow(dead_code)]
-    pub fn reset(&mut self) {
+    fn reset(&mut self) {
         for i in range(0,257)   {
             self.freq[i] = 0;
         }
     }
     
     /// count elements in the input
-    pub fn gather(&mut self, input: &[u8])  {
+    fn gather(&mut self, input: &[u8])  {
         for &b in input.iter()  {
             self.freq[b] += 1;
         }
     }
     
     /// build offset table
-    pub fn accumulate(&mut self)    {
+    fn accumulate(&mut self)    {
         let mut n = 0;
         for i in range(0,256)   {
             let f = self.freq[i];
@@ -59,7 +60,7 @@ impl Radix  {
     }
     
     /// return next byte position
-    pub fn position(&mut self, b: u8)-> uint   {
+    fn position(&mut self, b: u8)-> uint   {
         let pos = self.freq[b];
         self.freq[b] += 1;
         assert!( self.freq[b] <= self.freq[b+1] );
@@ -67,8 +68,9 @@ impl Radix  {
     }
     
     /// shift frequences to the left
+    /// allows the offsets to be re-used after all positions are obtained
     #[allow(dead_code)]
-    pub fn shift(&mut self) {
+    fn shift(&mut self) {
         assert_eq!( self.freq[255], self.freq[256] );
         for i in range(256,0)   {
             self.freq[i] = self.freq[i-1];
@@ -101,6 +103,7 @@ impl<R: Reader> Decoder<R> {
     /// Creates a new decoder which will read data from the given stream. The
     /// inner stream can be re-acquired by moving out of the `r` field of this
     /// structure.
+    /// 'extra' switch allows allocating extra N words of memory for better performance
     pub fn new(r: R, extra: bool) -> Decoder<R> {
         Decoder {
             r: r,
@@ -220,20 +223,22 @@ pub struct Encoder<W> {
     priv buf: ~[u8],
     priv suf: ~[uint],
     priv wrote_header: bool,
-    priv limit: uint,
+    priv block_size: uint,
 }
 
 impl<W: Writer> Encoder<W> {
     /// Creates a new encoder which will have its output written to the given
     /// output stream. The output stream can be re-acquired by calling
     /// `finish()`
+    /// 'block_size' is idealy as big as your input, unless you know for sure that
+    /// the input consists of multiple parts of different nature. Often set as 4Mb.
     pub fn new(w: W, block_size: uint) -> Encoder<W> {
         Encoder {
             w: w,
             buf: ~[],
             suf: ~[],
             wrote_header: false,
-            limit: block_size,
+            block_size: block_size,
         }
     }
 
@@ -279,6 +284,7 @@ impl<W: Writer> Encoder<W> {
         }
         assert!( origin != n );
         self.w.write_le_u32(origin as u32);
+        self.buf.truncate(0);
     }
 
     /// This function is used to flag that this session of compression is done
@@ -294,15 +300,15 @@ impl<W: Writer> Writer for Encoder<W> {
     fn write(&mut self, mut buf: &[u8]) {
         if !self.wrote_header {
             self.w.write_le_u32(MAGIC);
-            self.w.write_le_u32(self.limit as u32);
+            self.w.write_le_u32(self.block_size as u32);
             self.wrote_header = true;
         }
 
         while buf.len() > 0 {
-            let amt = num::min(self.limit - self.buf.len(), buf.len());
-            self.buf.push_all(buf.slice_to(amt));
+            let amt = num::min( self.block_size - self.buf.len(), buf.len() );
+            self.buf.push_all( buf.slice_to(amt) );
 
-            if self.buf.len() == self.limit {
+            if self.buf.len() == self.block_size {
                 self.encode_block();
             }
             buf = buf.slice_from(amt);
@@ -340,7 +346,7 @@ mod test {
     }
 
     fn roundtrip(bytes: &[u8]) {
-        let mut e = Encoder::new( MemWriter::new(), 2<<20 );
+        let mut e = Encoder::new( MemWriter::new(), 1<<10 );
         e.write(bytes);
         let encoded = e.finish().inner();
 
