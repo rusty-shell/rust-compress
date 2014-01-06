@@ -6,5 +6,7 @@
 
 extern mod extra;
 
+pub mod bwt;
 //mod flate;
 pub mod lz4;
+
