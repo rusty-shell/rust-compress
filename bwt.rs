@@ -327,7 +327,6 @@ impl<W: Writer> Writer for Encoder<W> {
 mod test {
     use extra::test;
     //use std::rand;
-    use std::io::Decorator;
     use std::io::mem::{BufReader, MemWriter};
     use super::{Decoder, Encoder};
 
@@ -348,7 +347,7 @@ mod test {
     fn roundtrip(bytes: &[u8]) {
         let mut e = Encoder::new( MemWriter::new(), 1<<10 );
         e.write(bytes);
-        let encoded = e.finish().inner();
+        let encoded = e.finish().unwrap();
 
         let mut d = Decoder::new( BufReader::new(encoded), true );
         let decoded = d.read_to_end();
