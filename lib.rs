@@ -1,4 +1,5 @@
 #[crate_id = "compress"];
+#[crate_type = "rlib"];
 #[deny(warnings)];
 #[deny(missing_doc)];
 

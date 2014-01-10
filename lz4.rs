@@ -266,6 +266,9 @@ impl<R: Reader> Decoder<R> {
         }
         return true;
     }
+
+    /// Tests whether the end of this LZ4 stream has been reached
+    pub fn eof(&mut self) -> bool { return self.eof }
 }
 
 impl<R: Reader> Reader for Decoder<R> {
@@ -294,8 +297,6 @@ impl<R: Reader> Reader for Decoder<R> {
 
         return Some(len - amt);
     }
-
-    fn eof(&mut self) -> bool { return self.eof }
 }
 
 /// This structure is used to compress a stream of bytes using the LZ4
@@ -313,6 +314,9 @@ impl<W: Writer> Encoder<W> {
     /// Creates a new encoder which will have its output written to the given
     /// output stream. The output stream can be re-acquired by calling
     /// `finish()`
+    ///
+    /// NOTE: compression isn't actually implemented just yet, this is just a
+    /// skeleton of a future implementation.
     pub fn new(w: W) -> Encoder<W> {
         Encoder {
             w: w,

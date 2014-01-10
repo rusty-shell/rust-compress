@@ -31,7 +31,7 @@ impl Radix  {
             freq : [0,..257],
         }
     }
-    
+
     /// reset counters
     /// allows the struct to be re-used
     #[allow(dead_code)]
@@ -40,14 +40,14 @@ impl Radix  {
             self.freq[i] = 0;
         }
     }
-    
+
     /// count elements in the input
     fn gather(&mut self, input: &[u8])  {
         for &b in input.iter()  {
             self.freq[b] += 1;
         }
     }
-    
+
     /// build offset table
     fn accumulate(&mut self)    {
         let mut n = 0;
@@ -58,7 +58,7 @@ impl Radix  {
         }
         self.freq[256] = n;
     }
-    
+
     /// return next byte position
     fn position(&mut self, b: u8)-> uint   {
         let pos = self.freq[b];
@@ -66,7 +66,7 @@ impl Radix  {
         assert!( self.freq[b] <= self.freq[b+1] );
         pos
     }
-    
+
     /// shift frequences to the left
     /// allows the offsets to be re-used after all positions are obtained
     #[allow(dead_code)]
@@ -141,7 +141,7 @@ impl<R: Reader> Decoder<R> {
         self.temp.truncate(0);
         self.temp.reserve(n);
         self.r.push_bytes(&mut self.temp, n);
-        
+
         let mut radix = Radix::new();
         radix.gather( self.temp );
         radix.accumulate();
@@ -149,7 +149,7 @@ impl<R: Reader> Decoder<R> {
         let origin = self.r.read_le_u32() as uint + 1;
         self.output.truncate(0);
         self.output.reserve(n);
-        
+
         if self.extra_memory    {
             self.table.truncate(0);
             self.table.grow_fn(n+1, |_| 0);
@@ -180,6 +180,11 @@ impl<R: Reader> Decoder<R> {
         self.start = 0;
         return true;
     }
+
+    /// Tests whether the end of this BWT stream has been reached.
+    pub fn eof(&mut self) -> bool {
+        self.start >= self.output.len() && self.r.eof()
+    }
 }
 
 impl<R: Reader> Reader for Decoder<R> {
@@ -208,10 +213,6 @@ impl<R: Reader> Reader for Decoder<R> {
         }
 
         return Some(len - amt);
-    }
-
-    fn eof(&mut self) -> bool {
-        self.start >= self.output.len() && self.r.eof()
     }
 }
 
@@ -245,11 +246,11 @@ impl<W: Writer> Encoder<W> {
     fn encode_block(&mut self) {
         let n = self.buf.len();
         self.w.write_le_u32(n as u32);
-        
+
         let mut radix = Radix::new();
         radix.gather( self.buf );
         radix.accumulate();
-        
+
         self.suf.truncate(0);
         self.suf.grow_fn(n, |_| n);
         for i in range(0,n) {
@@ -257,7 +258,7 @@ impl<W: Writer> Encoder<W> {
             let p = radix.position(b);
             self.suf[p] = i;
         }
-        
+
         for i in range(0,256)   {
             let lo = radix.freq[i];
             let hi = radix.freq[i+1];
@@ -268,17 +269,17 @@ impl<W: Writer> Encoder<W> {
                     self.buf.slice_from(b).iter())
             });
         }
-        
+
         let mut origin = n;
         self.w.write_u8( self.buf[n-1] );
-        
+
         for i in range(0,n) {
             let s = self.suf[i];
             if s==0 {
                 assert!( origin == n );
                 origin = i;
             }else   {
-                let b = self.buf[s-1]; 
+                let b = self.buf[s-1];
                 self.w.write_u8( b );
             }
         }
