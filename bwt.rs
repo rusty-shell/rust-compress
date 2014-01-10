@@ -180,16 +180,10 @@ impl<R: Reader> Decoder<R> {
         self.start = 0;
         return true;
     }
-
-    /// Tests whether the end of this BWT stream has been reached.
-    pub fn eof(&mut self) -> bool {
-        self.start >= self.output.len() && self.r.eof()
-    }
 }
 
 impl<R: Reader> Reader for Decoder<R> {
     fn read(&mut self, dst: &mut [u8]) -> Option<uint> {
-        if self.r.eof() { return None }
         if !self.header {
             self.read_header();
             self.header = true;
@@ -197,8 +191,8 @@ impl<R: Reader> Reader for Decoder<R> {
         let mut amt = dst.len();
         let len = amt;
 
-        while amt > 0 && !self.eof() {
-            if self.output.len() == self.start    {
+        while amt > 0 {
+            if self.output.len() == self.start {
                 if !self.decode_block() {
                    break
                 }
@@ -212,7 +206,7 @@ impl<R: Reader> Reader for Decoder<R> {
             amt -= n;
         }
 
-        return Some(len - amt);
+        if len == amt {None} else {Some(len - amt)}
     }
 }
 
