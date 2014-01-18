@@ -322,7 +322,7 @@ impl<W: Writer> Writer for Encoder<W> {
 mod test {
     use extra::test;
     //use std::rand;
-    use std::io::mem::{BufReader, MemWriter};
+    use std::io::{BufReader, MemWriter};
     use super::{Decoder, Encoder};
 
     fn test_decode(input: &[u8], output: &[u8], extra_memory: bool) {
