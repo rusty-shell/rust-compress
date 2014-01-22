@@ -1,7 +1,7 @@
 #[crate_id = "compress"];
 #[crate_type = "rlib"];
-#[deny(warnings)];
-#[deny(missing_doc)];
+#[deny(warnings, missing_doc)];
+#[feature(macro_rules)];
 
 //! dox (placeholder)
 
@@ -9,7 +9,7 @@ extern mod extra;
 
 pub mod bwt;
 pub mod dc;
-//mod flate;
+pub mod flate;
 pub mod lz4;
 
 /// Entropy coder family

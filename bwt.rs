@@ -24,7 +24,7 @@ EC (Entropy Coder): Huffman, Arithmetic, RC (Range Coder)
 # Example
 
 ```rust
-let stream = Path::new("path/to/file.bwt");
+let stream = File::open(&Path::new("path/to/file.bwt"));
 let decompressed = bwt::Decoder::new(stream,true).read_to_end();
 ```
 

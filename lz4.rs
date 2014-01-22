@@ -9,7 +9,7 @@ interfaces wrapping an underlying stream.
 # Example
 
 ```rust
-let stream = Path::new("path/to/file.lz4");
+let stream = File::open(&Path::new("path/to/file.lz4"));
 let decompressed = l4z::Decoder::new(stream).read_to_end();
 ```
 
