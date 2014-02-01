@@ -8,6 +8,7 @@
 extern mod extra;
 
 pub mod bwt;
+pub mod dc;
 //mod flate;
 pub mod lz4;
 
