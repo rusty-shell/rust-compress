@@ -159,11 +159,11 @@ impl<R: Reader> Decoder<R> {
                 self.table[p+1] = if i<origin {i} else {i+1};
             }
             let mut i = origin;
-            n.times(|| {
+            for _ in range(0, n) {
                 i = self.table[i];
                 let j = if i>origin {i-1} else {i};
                 self.output.push( self.temp[j] );
-            });
+            }
             assert_eq!(i, 0);
         }else   {
             self.output.grow_fn(n, |_| 0);
