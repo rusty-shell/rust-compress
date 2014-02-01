@@ -11,3 +11,8 @@ pub mod bwt;
 //mod flate;
 pub mod lz4;
 
+/// Entropy coder family
+//http://en.wikipedia.org/wiki/Entropy_encoding
+pub mod entropy {
+	pub mod ari;
+}
