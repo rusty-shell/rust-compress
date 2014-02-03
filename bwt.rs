@@ -5,6 +5,22 @@ BWT (Burrows-Wheeler Transform) forward and backward transformation
 This module contains a bruteforce implementation of BWT encoding in Rust as well as standard decoding.
 These are exposed as a standard `Reader` and `Writer` interfaces wrapping an underlying stream.
 
+BWT output stream places together symbols with similar leading contexts. This reshaping of the entropy
+allows further stages to deal with repeated sequences of symbols for better compression.
+
+Typical compression schemes are:
+BWT + RLE (+ EC)
+RLE + BWT + MTF + RLE + EC  : bzip2
+BWT + DC + EC               : ybs
+
+Where the stage families are:
+BWT: BWT (Burrows-Wheeler Transform), ST (Shindler transform)
+RLE: RLE (Run-Length Encoding)
+MTF: MTF (Move-To-Front), WFC (Weighted Frequency Coding)
+DC: DC (Distance Coding), IF (Inverse Frequencies)
+EC (Entropy Coder): Huffman, Arithmetic, RC (Range Coder)
+
+
 # Example
 
 ```rust
@@ -14,53 +30,56 @@ let decompressed = bwt::Decoder::new(stream,true).read_to_end();
 
 # Credit
 
+This is an original (mostly trivial) implementation.
+
 */
 
-use std::{iter,num,vec};
+use std::{iter, num, vec};
 
 static MAGIC    : u32   = 0x74776272;	//=rbwt
 
-struct Radix    {
-    freq    : [uint,..257],
+/// Radix sorting primitive
+pub struct Radix    {
+    /// number of occurancies (frequency) per symbox
+    freq    : [uint,..0x101],
 }
 
 impl Radix  {
     /// create Radix sort instance
-    fn new() -> Radix   {
+    pub fn new() -> Radix   {
         Radix   {
-            freq : [0,..257],
+            freq : [0,..0x101],
         }
     }
 
     /// reset counters
     /// allows the struct to be re-used
-    #[allow(dead_code)]
-    fn reset(&mut self) {
-        for i in range(0,257)   {
+    pub fn reset(&mut self) {
+        for i in range(0,0x101)   {
             self.freq[i] = 0;
         }
     }
 
     /// count elements in the input
-    fn gather(&mut self, input: &[u8])  {
+    pub fn gather(&mut self, input: &[u8])  {
         for &b in input.iter()  {
             self.freq[b] += 1;
         }
     }
 
     /// build offset table
-    fn accumulate(&mut self)    {
+    pub fn accumulate(&mut self)    {
         let mut n = 0;
-        for i in range(0,256)   {
+        for i in range(0,0x100)   {
             let f = self.freq[i];
             self.freq[i] = n;
             n += f;
         }
-        self.freq[256] = n;
+        self.freq[0x100] = n;
     }
 
     /// return next byte position
-    fn position(&mut self, b: u8)-> uint   {
+    pub fn position(&mut self, b: u8)-> uint   {
         let pos = self.freq[b];
         self.freq[b] += 1;
         assert!( self.freq[b] <= self.freq[b+1] );
@@ -69,10 +88,9 @@ impl Radix  {
 
     /// shift frequences to the left
     /// allows the offsets to be re-used after all positions are obtained
-    #[allow(dead_code)]
-    fn shift(&mut self) {
-        assert_eq!( self.freq[255], self.freq[256] );
-        for i in range(256,0)   {
+    pub fn shift(&mut self) {
+        assert_eq!( self.freq[0x100], self.freq[0x100] );
+        for i in iter::range_inclusive(1,0x100).rev()   {
             self.freq[i] = self.freq[i-1];
         }
         self.freq[0] = 0;
