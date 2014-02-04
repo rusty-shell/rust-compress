@@ -13,6 +13,7 @@ rustpkg install github.com/alexcrichton/rust-compress
 
 The following algorithms are alredy implemented in the main branch:
 
+* DEFLATE: standard decoder based on RFC 1951
 * LZ4 (Ziv-Lempel modification): dummy encoder, semi-complete decoder
 * BWT (Burrows-Wheeler Transform): straightforward encoder, standard decoder
 * DC (Distance Coding): basic encoder, standard decoder
@@ -22,7 +23,6 @@ The following algorithms are alredy implemented in the main branch:
 
 The following algorithms are either planned or in development at this point:
 
-* flate (LZ77 + Huffman)
 * RLE (Run-Length Encoding)
 * WFC (Weight-Frequency Coding)
 * SA/BWT in linear time

@@ -1,11 +1,26 @@
 //! DEFLATE Compression and Decompression
 //!
-//! This module contains an implementation of the DEFLATE compression scheme
-//! specified by http://www.gzip.org/zlib/rfc-deflate.html. This format is often
-//! used as the underpinning of other compression formats.
+//! This module contains an implementation of the DEFLATE compression scheme.
+//! This format is often used as the underpinning of other compression formats.
 //!
-//! Much of this code is based on the puff.c implementation found at
-//! http://svn.ghostscript.com/ghostscript/trunk/gs/zlib/contrib/puff/puff.c
+//! # Example
+//!
+//! ```rust
+//! use compress::flate;
+//! use std::io::File;
+//!
+//! let stream = File::open(&Path::new("path/to/file.flate"));
+//! let decompressed = flate::Decoder::new(stream).read_to_end();
+//! ```
+//!
+//! # Related links
+//!
+//! * http://tools.ietf.org/html/rfc1951 - RFC that this implementation is based
+//!   on
+//! * http://www.gzip.org/zlib/rfc-deflate.html - simplified version of RFC 1951
+//!   used as a reference
+//! * http://svn.ghostscript.com/ghostscript/trunk/gs/zlib/contrib/puff/puff.c -
+//!   Much of this code is based on the puff.c implementation found here
 
 use std::num;
 use std::io;
@@ -111,7 +126,7 @@ impl HuffmanTree {
         let mut first = 0;
         let mut index = 0;
         for len in range(1, MAXBITS + 1) {
-            code |= s.bits(1);
+            code |= if_ok!(s.bits(1));
             let count = self.count[len];
             if code < first + count {
                 return Ok(self.symbol[index + (code - first)])
@@ -174,8 +189,8 @@ impl<R: Reader> Decoder<R> {
     fn block(&mut self) -> io::IoResult<()> {
         self.pos = 0;
         self.block = vec::with_capacity(4096);
-        if self.bits(1) == 1 { self.eof = true; }
-        match self.bits(2) {
+        if if_ok!(self.bits(1)) == 1 { self.eof = true; }
+        match if_ok!(self.bits(2)) {
             0 => self.statik(),
             1 => self.fixed(),
             2 => self.dynamic(),
@@ -220,16 +235,16 @@ impl<R: Reader> Decoder<R> {
 
     // Bytes in the stream are LSB first, so the bitbuf is appended to from the
     // left and consumed from the right.
-    fn bits(&mut self, cnt: uint) -> u16 {
+    fn bits(&mut self, cnt: uint) -> io::IoResult<u16> {
         while self.bitcnt < cnt {
-            let byte = self.r.read_byte().unwrap();
+            let byte = if_ok!(self.r.read_byte());
             self.bitbuf |= (byte as uint) << self.bitcnt;
             self.bitcnt += 8;
         }
         let ret = self.bitbuf & ((1 << cnt) - 1);
         self.bitbuf >>= cnt;
         self.bitcnt -= cnt;
-        return ret as u16;
+        return Ok(ret as u16);
     }
 
     fn codes(&mut self, lens: &HuffmanTree,
@@ -267,12 +282,14 @@ impl<R: Reader> Decoder<R> {
                     if n as uint > EXTRALENS.len() {
                         return error(InvalidHuffmanCode)
                     }
-                    let len = EXTRALENS[n] + self.bits(EXTRABITS[n] as uint);
+                    let len = EXTRALENS[n] +
+                              if_ok!(self.bits(EXTRABITS[n] as uint));
+
                     let len = len as uint;
 
                     let dist = if_ok!(dist.decode(self));
                     let dist = EXTRADIST[dist] +
-                               self.bits(EXTRADBITS[dist] as uint);
+                               if_ok!(self.bits(EXTRADBITS[dist] as uint));
                     let dist = dist as uint;
 
                     // update the output buffer with any data we haven't pushed
@@ -365,9 +382,9 @@ impl<R: Reader> Decoder<R> {
     }
 
     fn dynamic(&mut self) -> io::IoResult<()> {
-        let hlit = self.bits(5) + 257; // number of length codes
-        let hdist = self.bits(5) + 1;  // number of distance codes
-        let hclen = self.bits(4) + 4;  // number of code length codes
+        let hlit = if_ok!(self.bits(5)) + 257; // number of length codes
+        let hdist = if_ok!(self.bits(5)) + 1;  // number of distance codes
+        let hclen = if_ok!(self.bits(4)) + 4;  // number of code length codes
         if hlit > MAXLCODES || hdist > MAXDCODES {
             return error(HuffmanTreeTooLarge);
         }
@@ -380,7 +397,7 @@ impl<R: Reader> Decoder<R> {
         ];
         let mut lengths = [0, ..19];
         for i in range(0, hclen) {
-            lengths[ORDER[i]] = self.bits(3);
+            lengths[ORDER[i]] = if_ok!(self.bits(3));
         }
         let tree = if_ok!(HuffmanTree::construct(lengths));
 
@@ -398,14 +415,14 @@ impl<R: Reader> Decoder<R> {
                 16 if i == 0 => return error(InvalidHuffmanHeaderSymbol),
                 16 => {
                     let prev = lengths[i - 1];
-                    for _ in range(0, self.bits(2) + 3) {
+                    for _ in range(0, if_ok!(self.bits(2)) + 3) {
                         lengths[i] = prev;
                         i += 1;
                     }
                 }
                 // all codes start out as 0, so these just skip
-                17 => { i += self.bits(3) + 3; }
-                18 => { i += self.bits(7) + 11; }
+                17 => { i += if_ok!(self.bits(3)) + 3; }
+                18 => { i += if_ok!(self.bits(7)) + 11; }
                 _ => return error(InvalidHuffmanHeaderSymbol),
             }
         }
@@ -424,8 +441,9 @@ impl<R: Reader> Decoder<R> {
         self.eof && self.pos == self.block.len()
     }
 
-    #[allow(dead_code)]
-    fn reset(&mut self) {
+    /// Resets this flate decoder. Note that this could corrupt an in-progress
+    /// decoding of a stream.
+    pub fn reset(&mut self) {
         self.bitbuf = 0;
         self.bitcnt = 0;
         self.eof = false;
