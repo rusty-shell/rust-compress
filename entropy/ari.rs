@@ -25,7 +25,7 @@ This is an original implementation.
 
 */
 
-use std::{num, vec};
+use std::{num, io, vec};
 
 pub type Symbol = u8;
 static symbol_bits: uint = 8;
@@ -131,7 +131,7 @@ impl Ari {
     pub fn new_flat(num_values: uint) -> Ari {
         Ari::new_custom(num_values, |_| 1)
     }
-    
+
     /// Encode 'value', using the range coder
     /// returns a list of output bytes
     pub fn encode(&mut self, value: uint, rc: &mut RC) -> ~[Symbol] {
@@ -142,7 +142,7 @@ impl Ari {
         rc.process(self.total as Border, lo as Border, hi as Border, |byte| accum.push(byte));
         accum
     }
-    
+
     /// Decode a value using given 'code' on the range coder
     /// Returns a (value, num_symbols_to_shift) pair
     pub fn decode(&mut self, code: Border, rc: &mut RC) -> (uint,uint) {
@@ -198,7 +198,7 @@ pub struct Decoder<R> {
     /// progress the output stream will get corrupted.
     r: R,
     priv output_left: uint,
-    priv rc: RC, 
+    priv rc: RC,
     priv ari: Ari,
     priv code: Border,
     priv bytes_read: uint,
@@ -219,20 +219,21 @@ impl<R: Reader> Decoder<R> {
     }
 
     /// Start decoding by reading a full code word
-    fn start(&mut self) {
+    fn start(&mut self) -> io::IoResult<()> {
         assert!(border_bits == 32);
-        self.code = self.r.read_be_u32();
+        self.code = if_ok!(self.r.read_be_u32());
         self.bytes_read += 4;
+        Ok(())
     }
 }
 
 impl<R: Reader> Reader for Decoder<R> {
-    fn read(&mut self, dst: &mut [u8]) -> Option<uint> {
+    fn read(&mut self, dst: &mut [u8]) -> io::IoResult<uint> {
         if self.output_left == 0 {
-            return None
+            return Err(io::standard_error(io::EndOfFile))
         }
         if self.bytes_read == 0 {
-            self.start();
+            if_ok!(self.start());
         }
         let write_len = num::min(dst.len(), self.output_left);
         for out_byte in dst.mut_slice_to(write_len).mut_iter() {
@@ -240,20 +241,20 @@ impl<R: Reader> Reader for Decoder<R> {
             self.ari.update(byte, 10, 1);
             *out_byte = byte as u8;
             for _ in range(0,shift) {
-                let byte = self.r.read_u8() as Border;
+                let byte = if_ok!(self.r.read_u8()) as Border;
                 self.bytes_read += 1;
                 self.code = (self.code<<8) + byte;
             }
         }
         self.output_left -= write_len;
-        Some(write_len)
+        Ok(write_len)
     }
 }
 
-/// Arithmetic Encoder 
+/// Arithmetic Encoder
 pub struct Encoder<W> {
     priv w: W,
-    priv rc: RC, 
+    priv rc: RC,
     priv ari: Ari,
 }
 
@@ -268,23 +269,24 @@ impl<W: Writer> Encoder<W> {
     }
 
     /// Finish decoding by writing the code tail word
-    pub fn finish(mut self) -> W {
+    pub fn finish(mut self) -> (W, io::IoResult<()>) {
         assert!(border_bits == 32);
         let code = self.rc.get_code_tail();
-        self.w.write_be_u32(code);
-        self.w.flush();
-        self.w
+        let result = self.w.write_be_u32(code);
+        let result = result.and(self.w.flush());
+        (self.w, result)
     }
 }
 
 impl<W: Writer> Writer for Encoder<W> {
-    fn write(&mut self, buf: &[u8]) {
+    fn write(&mut self, buf: &[u8]) -> io::IoResult<()> {
         for byte in buf.iter() {
             let value = *byte as uint;
             let bytes = self.ari.encode(value, &mut self.rc);
             self.ari.update(value, 10, 1);
-            self.w.write(bytes.as_slice());
+            if_ok!(self.w.write(bytes.as_slice()));
         }
+        Ok(())
     }
 }
 
@@ -298,11 +300,13 @@ mod test {
     fn roundtrip(bytes: &[u8]) {
         info!("Roundtrip Ari of size {}", bytes.len());
         let mut e = Encoder::new( MemWriter::new() );
-        e.write(bytes);
-        let encoded = e.finish().unwrap();
+        e.write(bytes).unwrap();
+        let (e, r) = e.finish();
+        r.unwrap();
+        let encoded = e.unwrap();
         debug!("Roundtrip input {:?} encoded {:?}", bytes, encoded);
         let mut d = Decoder::new( BufReader::new(encoded), bytes.len() );
-        let decoded = d.read_to_end();
+        let decoded = d.read_to_end().unwrap();
         assert_eq!(decoded.as_slice(), bytes);
     }
 
