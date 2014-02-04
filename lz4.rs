@@ -9,8 +9,11 @@ interfaces wrapping an underlying stream.
 # Example
 
 ```rust
+use compress::lz4;
+use std::io::File;
+
 let stream = File::open(&Path::new("path/to/file.lz4"));
-let decompressed = l4z::Decoder::new(stream).read_to_end();
+let decompressed = lz4::Decoder::new(stream).read_to_end();
 ```
 
 # Credit

@@ -15,9 +15,13 @@ http://en.wikipedia.org/wiki/Move-to-front_transform
 # Example
 
 ```rust
+use compress::dc;
+
 let bytes = bytes!("abracadabra");
-let (alphabet,distances) = encode_simple(bytes);
-let decoded = decode_simple(bytes.len(), alphabet.as_slice(), distances.as_slice());
+let (alphabet,distances) = dc::encode_simple(bytes);
+let decoded = dc::decode_simple(bytes.len(),
+                                alphabet.as_slice(),
+                                distances.as_slice());
 ```
 
 # Credit
