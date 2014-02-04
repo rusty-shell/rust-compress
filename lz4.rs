@@ -118,7 +118,7 @@ impl<'a> BlockDecoder<'a> {
     fn grow_output(&mut self, target: uint) {
         if self.output.capacity() < target {
             debug!("growing {} to {}", self.output.capacity(), target);
-            self.output.reserve_at_least(target);
+            self.output.reserve(target);
         }
         unsafe {
             self.output.set_len(target);
