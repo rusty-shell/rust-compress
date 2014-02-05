@@ -9,4 +9,9 @@ script:
   - ls
   - ./compress
   - rustdoc --test -L. lib.rs
+after_script:
+  - curl http://www.rust-ci.org/artifacts/put?t=$RUSTCI_TOKEN | sh
+env:
+  global:
+    - secure: Dvr+95DPEvg+ZaGBaipsVz0m9sqdyELSUtdoUPOrj4IU7DUMHTCIqSHEubWdmdVvvILG6pNBgtsxhXM55Skij8peEpr/eEiQHKM3pxT3zIwlNVAaQ6LKiZlznNJUC4oIN9lIdarsK4Aw4c9LbIGM5W3rYzsrSkT4RPrpcTp4XCo=
 
