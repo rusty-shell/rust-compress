@@ -9,6 +9,7 @@ script:
   - ls
   - ./compress
   - rustdoc --test -L. lib.rs
+  - rustdoc lib.rs
 after_script:
   - curl http://www.rust-ci.org/artifacts/put?t=$RUSTCI_TOKEN | sh
 env:
