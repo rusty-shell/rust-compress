@@ -49,8 +49,6 @@ This is an original (mostly trivial) implementation.
 
 use std::{io, iter, num, vec};
 
-static MAGIC    : u32   = 0x74776272;	//=rbwt
-
 /// Radix sorting primitive
 pub struct Radix    {
     /// number of occurancies (frequency) per symbox
@@ -282,11 +280,7 @@ impl<R: Reader> Decoder<R> {
     }
 
     fn read_header(&mut self) -> io::IoResult<()> {
-        if if_ok!(self.r.read_le_u32()) != MAGIC {
-            return Err(io::standard_error(io::InvalidInput))
-        }
         self.max_block_size = if_ok!(self.r.read_le_u32()) as uint;
-
         debug!("max size: {}", self.max_block_size);
 
         return Ok(());
@@ -409,7 +403,6 @@ impl<W: Writer> Encoder<W> {
 impl<W: Writer> Writer for Encoder<W> {
     fn write(&mut self, mut buf: &[u8]) -> io::IoResult<()> {
         if !self.wrote_header {
-            if_ok!(self.w.write_le_u32(MAGIC));
             if_ok!(self.w.write_le_u32(self.block_size as u32));
             self.wrote_header = true;
         }

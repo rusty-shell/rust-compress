@@ -1,37 +1,43 @@
-#[crate_id = "compress"];
+#[crate_id = "app"];
 #[crate_type = "bin"];
 #[deny(warnings, missing_doc)];
 #[feature(macro_rules)];
 
-//! A rust-compress utility that allows to test implemented algorithms
-//! and their combinations using a simple command line.
+//! A rust-compress application that allows testing of implemented
+//! algorithms and their combinations using a simple command line.
 //! Example invocations:
-//! echo -n "abracadabra" | ./compress bwt | xxd
+//! echo -n "abracadabra" | ./app bwt | xxd
+//! echo "banana" | ./app bwt | ./app -d
+
+extern mod compress;
+
 
 use std::hashmap::HashMap;
-use std::io;
-use std::os;
-use std::vec;
+use std::{io, os, str, vec};
+use compress::{bwt, lz4};
+//use compress::entropy::ari;
 
-pub mod bwt;
-pub mod dc;
 
+static MAGIC    : u32   = 0x73632172;   //=r!cs
 
 struct Config {
     exe_name: ~str,
-    method: ~str,
+    methods: ~[~str],
     block_size: uint,
+    decompress: bool,
 }
 
 impl Config {
     fn query(args: &[~str]) -> Config {
         let mut cfg = Config {
             exe_name: args[0].clone(),
-            method: ~"",
-            block_size: 0,
+            methods: ~[],
+            block_size: 1<<16,
+            decompress: false,
         };
         let mut handlers: HashMap<&str,|&str|> = HashMap::new();
-        handlers.insert(&"block",|b| { cfg.method = from_str(b).unwrap(); });
+        handlers.insert(&"d",|_| { cfg.decompress = true; });
+        handlers.insert(&"block",|b| { cfg.block_size = from_str(b).unwrap(); });
         
         for arg in args.iter().skip(1) {
             if arg.starts_with(&"-") {
@@ -40,49 +46,143 @@ impl Config {
                     None => println!("Warning: unrecognized option: {}", *arg),
                 }
             }else {
-                assert!(cfg.method.is_empty());
-                cfg.method = arg.to_owned();
+                cfg.methods.push(arg.to_owned());
             }
         }
         cfg
     }
 }
 
+
+struct ReaderWrap(~Reader);
+impl Reader for ReaderWrap {
+    fn read(&mut self, buf: &mut [u8]) -> io::IoResult<uint> {
+        let &ReaderWrap(ref mut r) = self;
+        r.read(buf)
+    }
+}
+struct WriterWrap(~Writer);
+impl Writer for WriterWrap {
+    fn write(&mut self, buf: &[u8]) -> io::IoResult<()> {
+        let &WriterWrap(ref mut w) = self;
+        w.write(buf)
+    }
+    fn flush(&mut self) -> io::IoResult<()> {
+        let &WriterWrap(ref mut w) = self;
+        w.flush()
+    }
+}
+
+struct Pass {
+    encode: 'static |~Writer,&Config| -> ~io::Writer,
+    decode: 'static |~Reader,&Config| -> ~io::Reader,
+    info: ~str,
+}
+
 /// main entry point
 pub fn main() {
+    let mut passes: HashMap<~str,Pass> = HashMap::new();
+    passes.insert(~"dummy", Pass {
+        encode: |w,_| w,
+        decode: |r,_| r,
+        info: ~"pass-through",
+    });
+    /* // unclear what to do with Ari since it requires the size to be known
+    passes.insert(~"ari", Pass {
+        encode: |w,_c| {
+            ~ari::ByteEncoder::new(WriterWrap(w)) as ~Writer
+        },
+        decode: |r,_c| {
+            ~ari::ByteDecoder::new(ReaderWrap(r)) as ~Reader
+        },
+        info: ~"Adaptive arithmetic byte coder",
+    });*/
+    passes.insert(~"bwt", Pass {
+        encode: |w,c| {
+            ~bwt::Encoder::new(WriterWrap(w), c.block_size) as ~Writer
+        },
+        decode: |r,_c| {
+            ~bwt::Decoder::new(ReaderWrap(r), true) as ~Reader
+        },
+        info: ~"Burrows-Wheeler Transformation",
+    });
+    /* // looks like we are missing the encoder implementation
+    passes.insert(~"flate", Pass {
+        encode: |w,_c| {
+            ~flate::Encoder::new(WriterWrap(w), true) as ~Writer
+        },
+        decode: |r,_c| {
+            ~flate::Decoder::new(ReaderWrap(r), true) as ~Reader
+        },
+        info: ~"Standartized Ziv-Lempel + Huffman variant",
+    });*/
+    passes.insert(~"lz4", Pass {
+        encode: |w,_c| {
+            ~lz4::Encoder::new(WriterWrap(w)) as ~Writer
+        },
+        decode: |r,_c| { // LZ4 decoder seem to work
+            ~lz4::Decoder::new(ReaderWrap(r)) as ~Reader
+        },
+        info: ~"Ziv-Lempel derivative, focused at speed",
+    });
+
     let config = Config::query(os::args());
-    match config.method.as_slice() {
-        &"bwt" => {
-            // block parameter is not used at the moment
-            let input = io::stdin().read_to_end().unwrap();
-            let mut suf = vec::from_elem(input.len(), 0u as bwt::Suffix);
-            let mut output = io::stdout();
-            let origin = bwt::encode_brute(input, suf,
-                |ch| output.write_u8(ch).unwrap());
-            output.write_le_u32(origin as u32).unwrap();
-        },
-        &"unbwt" => {
-            let input = io::stdin().read_to_end().unwrap();
-            assert!(input.len() >= 4);
-            let n = input.len() - 4;
-            let origin = io::MemReader::new(input.slice_from(n).to_owned()).
-                read_le_u32().unwrap() as bwt::Suffix;
-            let mut suf = vec::from_elem(n, 0u as bwt::Suffix);
-            let mut output = io::stdout();
-            bwt::decode_std(input.slice_to(n), origin, suf,
-                |ch| output.write_u8(ch).unwrap());
-        },
-        &"" => {
-            println!("rust-compress test utility");
-            println!("Usage:");
-            println!("\t{} <options> <method> <input.bin >output.bin", config.exe_name);
-            println!("Options:");
-            println!("\t-block<X>[k|m]");
-            println!("Methods:");
-            println!("\t[un]bwt");
+    let mut input = io::stdin();
+    let mut output = io::stdout();
+    if config.decompress {
+        assert!(config.methods.is_empty(), "Decompression methods are set in stone");
+        match input.read_le_u32() {
+            Ok(magic) if magic != MAGIC => {
+                error!("Input is not a rust-compress archive");
+                return
+            },
+            Err(e) => {
+                error!("Unable to read input: {}", e.to_str());
+                return
+            },
+            _ => () //OK
         }
-        _ => {
-            println!("Requested method '{}' is not implemented", config.method);
+        let methods = vec::from_fn( input.read_u8().unwrap() as uint, |_| {
+            let len = input.read_u8().unwrap() as uint;
+            let bytes = input.read_bytes(len).unwrap();
+            str::from_utf8(bytes).unwrap().to_owned()
+        });
+        let mut rsum: ~Reader = ~input;
+        for met in methods.iter() {
+            info!("Found pass {}", *met);
+            match passes.find(met) {
+                Some(pa) => rsum = (pa.decode)(rsum, &config),
+                None => fail!("Pass is not implemented"),
+            }
         }
+        io::util::copy(&mut ReaderWrap(rsum), &mut output).unwrap();
+    }else if config.methods.is_empty() {
+        println!("rust-compress test application");
+        println!("Usage:");
+        println!("\t{} <options> <method1> .. <methodN> <input >output", config.exe_name);
+        println!("Options:");
+        println!("\t-d (to decompress)");
+        println!("\t-block<N> (BWT block size)");
+        println!("Passes:");
+        for (name,pa) in passes.iter() {
+            println!("\t{} = {}", *name, pa.info);
+        }
+    }else {
+        output.write_le_u32(MAGIC).unwrap();
+        output.write_u8(config.methods.len() as u8).unwrap();
+        for met in config.methods.iter() {
+            output.write_u8(met.len() as u8).unwrap();
+            output.write_str(*met).unwrap();
+        }
+        let mut wsum: ~Writer = ~output;
+        for met in config.methods.iter() {
+            match passes.find(met) {
+                Some(pa) => wsum = (pa.encode)(wsum, &config),
+                None => fail!("Pass {} is not implemented", *met)
+            }
+        }
+        let mut wrap = WriterWrap(wsum);
+        io::util::copy(&mut input, &mut wrap).unwrap();
+        wrap.flush().unwrap();
     }
 }

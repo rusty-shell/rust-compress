@@ -399,7 +399,7 @@ impl<W: Writer> Writer for Encoder<W> {
         if self.buf.len() > 0 {
             if_ok!(self.encode_block());
         }
-        Ok(())
+        self.w.flush()
     }
 }
 
