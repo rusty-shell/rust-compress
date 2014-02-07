@@ -158,6 +158,80 @@ pub fn decode<M: Model>(code: Border, model: &M, re: &mut RangeEncoder) -> (uint
 
 
 pub type Frequency = u16;
+pub static frequency_limit: uint = 0x10000;
+
+/// A binary value frequency
+pub struct FrequencyBinary {
+    /// frequency of bit 0
+    priv zero: Frequency,
+    /// total frequency
+    priv total: Frequency,
+    /// number of bits to shift on cut
+    priv cut_shift: uint,
+}
+
+impl FrequencyBinary {
+    /// Create a new flat (50/50 probability) instance
+    pub fn new_flat() -> FrequencyBinary {
+        FrequencyBinary { zero: 1, total: 2, cut_shift: 2 }
+    }
+    /// Create a new instance with a given percentage for zeroes
+    pub fn new_custom(zero_percent: u8) -> FrequencyBinary {
+        FrequencyBinary {
+            zero: zero_percent as Frequency,
+            total: 100,
+            cut_shift: 2,
+        }
+    }
+    /// Update frequencies in favor of given 'value'
+    pub fn update(&mut self, value: uint, add_log: uint, add_const: Frequency) {
+        assert!(value < 2);
+        let mut add;
+        while {
+            add = ((self.total>>add_log) + add_const) as uint;
+            (self.total as uint) + (add as uint) >= frequency_limit
+        }{
+            self.downscale();
+        }
+        debug!("\tUpdating by adding {} to value {}", add, value);
+        if value==0 {
+            self.zero += add as Frequency;
+        }
+        self.total += add as Frequency;
+    }
+    /// Reduce frequencies by 'cut_iter' bits
+    pub fn downscale(&mut self) {
+        let roundup = (1<<self.cut_shift) - 1;
+        self.zero = (self.zero + roundup) >> self.cut_shift;
+        self.total = (self.total + roundup) >> self.cut_shift;
+    }
+}
+
+impl Model for FrequencyBinary {
+    fn get_range(&self, value: Value) -> (Border,Border) {
+        if value==0 {
+            (0, self.zero as Border)
+        }else {
+            (self.zero as Border, self.total as Border)
+        }
+    }
+
+    fn find_value(&self, offset: Border) -> (Value,Border,Border) {
+        assert!(offset < self.total as Border,
+            "Invalid frequency offset {} requested under total {}",
+            offset, self.total);
+        if offset < self.zero as Border {
+            (0, 0, self.zero as Border)
+        }else {
+            (1, self.zero as Border, self.total as Border)
+        }
+    }
+
+    fn get_denominator(&self) -> Border {
+        self.total as Border
+    }
+}
+
 
 /// A simple table of frequencies.
 pub struct FrequencyTable {
@@ -165,22 +239,25 @@ pub struct FrequencyTable {
     priv total: Frequency,
     /// main table: value -> Frequency
     priv table: ~[Frequency],
-    /// number of LSB to shift on cut
+    /// number of bits to shift on cut
     priv cut_shift: uint,
-    /// threshold value to trigger the cut
-    priv cut_threshold: Frequency,
 }
 
 impl FrequencyTable {
     /// Create a new table with frequencies initialized by a function
     pub fn new_custom(num_values: uint, fn_init: |Value|-> Frequency) -> FrequencyTable {
         let freq = vec::from_fn(num_values, fn_init);
-        FrequencyTable {
-            total: freq.iter().fold(0, |u,&f| u+f),
+        let mut total = freq.iter().fold(0u, |u,&f| u+(f as uint));
+        let mut ft = FrequencyTable {
+            total: total as Frequency,
             table: freq,
             cut_shift: 1,
-            cut_threshold: 1<<12,
+        };
+        // downscale if needed
+        while total >= frequency_limit {
+            total = ft.downscale();
         }
+        ft
     }
 
     /// Create a new tanle with all frequencies being equal
@@ -200,21 +277,32 @@ impl FrequencyTable {
     /// using 'add_log' and 'add_const' to produce the additive factor
     /// the higher 'add_log' is, the more concervative is the adaptation
     pub fn update(&mut self, value: Value, add_log: uint, add_const: Frequency) {
-        let add = (self.total>>add_log) + add_const;
-        assert!(add < self.cut_threshold);
-        self.table[value] += add;
-        self.total += add;
-        debug!("\tUpdating by adding {} to value {}", add, value);
-        if self.total >= self.cut_threshold {
-            debug!("\tDownscaling frequencies");
-            self.total = 0;
-            let roundup = (1<<self.cut_shift) - 1;
-            for freq in self.table.mut_iter() {
-                // preserve non-zero frequencies to remain positive
-                *freq = (*freq+roundup) >> self.cut_shift;
-                self.total += *freq;
-            }
+        let mut add;
+        while {
+            add = ((self.total>>add_log) + add_const) as uint;
+            (self.total as uint) + (add as uint) >= frequency_limit
+        }{
+            self.downscale();
         }
+        debug!("\tUpdating by adding {} to value {}", add, value);
+        self.table[value] += add as Frequency;
+        self.total += add as Frequency;
+    }
+
+    /// Reduce frequencies by 'cut_iter' bits
+    /// Return the unbound total sum of frequencies
+    pub fn downscale(&mut self) -> uint {
+        debug!("\tDownscaling frequencies");
+        let roundup = (1<<self.cut_shift) - 1;
+        let mut total = 0u;
+        for freq in self.table.mut_iter() {
+            // preserve non-zero frequencies to remain positive
+            *freq = (*freq+roundup) >> self.cut_shift;
+            total += *freq as uint;
+        }
+        assert!(total < self.total as uint);
+        self.total = total as Frequency;
+        total
     }
 }
 
@@ -239,7 +327,7 @@ impl Model for FrequencyTable {
     }
 
     fn get_denominator(&self) -> Border {
-        return self.total as Border
+        self.total as Border
     }
 }
 
