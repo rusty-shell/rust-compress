@@ -94,8 +94,10 @@ impl Radix  {
     /// return next byte position, advance it internally
     pub fn place(&mut self, b: u8)-> uint   {
         let pos = self.freq[b];
+        assert!(self.freq[b] < self.freq[(b as uint)+1],
+            "Unable to place symbol {} at offset {}",
+            b, pos);
         self.freq[b] += 1;
-        assert!( self.freq[b] <= self.freq[b+1] );
         pos
     }
 
