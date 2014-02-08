@@ -108,8 +108,9 @@ pub fn encode(input: &[Symbol], distances: &mut [Distance], mtf: &mut MTF) -> ~[
             let rank = unique.len();
             mtf.symbols[rank] = sym;
             mtf.encode(sym);    //==rank
-            debug!("\t\tUnique => assigning rank {}, encoding {}", rank, i-rank);
-            unique.push((sym,i-rank))
+            // initial distances are not ordered to support re-shuffle
+            debug!("\t\tUnique => assigning rank {}, encoding {}", rank, i);
+            unique.push((sym,i))
         }else {
             let rank = mtf.encode(sym) as Distance;
             if rank > 0 {
@@ -139,8 +140,7 @@ pub fn encode_simple(input: &[Symbol]) -> (~[Symbol],~[Distance]) {
         let mut raw_dist = vec::from_elem(N, 0 as Distance);
         let pairs = encode(input, raw_dist.as_mut_slice(), &mut MTF::new());
         let symbols = pairs.map(|&(sym,_)| sym);
-        // skip the distance for the first unique symbol as it's always 0
-        let init_iter = pairs.iter().skip(1).map(|&(_,d)| d);
+        let init_iter = pairs.iter().map(|&(_,d)| d);
         // chain initial distances with intermediate ones
         let raw_iter = raw_dist.iter().filter_map(|&d| if d!=N {Some(d)} else {None});
         let mut combined = init_iter.chain(raw_iter);
@@ -149,37 +149,47 @@ pub fn encode_simple(input: &[Symbol]) -> (~[Symbol],~[Distance]) {
 }
 
 /// decode a block of distances with a list of initial symbols
-pub fn decode(alphabet: &[Symbol], distances: &[Distance], output: &mut [Symbol], mtf: &mut MTF) {
+pub fn decode(alphabet: Option<&[Symbol]>, distances: &[Distance], output: &mut [Symbol], mtf: &mut MTF) {
     let N = output.len();
-    let E = alphabet.len();
-    match alphabet  {
-        [] => {
+    let mut next = [N, ..TotalSymbols];
+    let E = match alphabet  {
+        Some([]) => {
+            // alphabet is empty
             assert_eq!(N,0);
             return
         },
-        [sym] => {
+        Some([sym]) => {
+            // there is only one known symbol
             for out in output.mut_iter()    {
                 *out = sym;
             }
             return
         }
-        _ => ()
-    }
+        Some(list) => {
+            // given fixed alphabet
+            for (rank,&sym) in list.iter().enumerate()   {
+                // initial distances are not ordered
+                next[sym] = distances[rank];// + (rank as Distance)
+                mtf.symbols[rank] = sym;
+                debug!("\tRegistering symbol {} of rank {} at position {}", sym, rank, next[sym]);
+            }
+            for rank in range(list.len(),TotalSymbols) {
+                mtf.symbols[rank] = 0; //erazing unused symbols
+            }
+            list.len()
+        },
+        None => {
+            // alphabet is large, total range of symbols is assumed
+            for i in range(0,TotalSymbols) {
+                next[i] = distances[i];
+                mtf.symbols[i] = i as Symbol;
+                debug!("\tRegistering symbol {} at position {}", i, next[i]);
+            }
+            TotalSymbols
+        },
+    };
     assert!(1+distances.len() <= N + E);
-    let mut next = [N, ..TotalSymbols];
-    for (rank,&sym) in alphabet.iter().enumerate()   {
-        next[sym] = if rank==0 {
-            0 // not encoded, always 0
-        }else {
-            distances[rank-1] + (rank as Distance)
-        };
-        debug!("\tRegistering symbol {} of rank {} at position {}", sym, rank, next[sym]);
-        mtf.symbols[rank] = sym;
-    }
-    let mut di = E-1;
-    for rank in range(E,TotalSymbols) {
-        mtf.symbols[rank] = 0; //erazing unused symbols
-    }
+    let mut di = E;
     let mut i = 0u;
     while i<N && di<distances.len() {
         let sym = mtf.symbols[0];
@@ -214,7 +224,7 @@ pub fn decode(alphabet: &[Symbol], distances: &[Distance], output: &mut [Symbol]
 /// decode with "batteries included" for quick testing
 pub fn decode_simple(N: uint, alphabet: &[Symbol], distances: &[Distance]) -> ~[Symbol] {
     let mut output = vec::from_elem(N, 0 as Symbol);
-    decode(alphabet, distances, output.as_mut_slice(), &mut MTF::new());
+    decode(Some(alphabet), distances, output.as_mut_slice(), &mut MTF::new());
     output
 }
 
