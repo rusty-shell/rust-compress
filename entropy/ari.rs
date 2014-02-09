@@ -17,12 +17,12 @@ use compress::entropy::ari;
 
 // Encode some text
 let text = "some text";
-let mut e = ari::Encoder::new(MemWriter::new());
+let mut e = ari::ByteEncoder::new(MemWriter::new());
 e.write_str(text);
-let (encoded, _) = e.finish();
+let (encoded, _) = e.encoder.finish();
 
 // Decode the encoded text
-let mut d = ari::Decoder::new(MemReader::new(encoded.unwrap()), text.len());
+let mut d = ari::ByteDecoder::new(MemReader::new(encoded.unwrap()), text.len());
 let decoded = d.read_to_end().unwrap();
 
 assert_eq!(decoded.as_slice(), text.as_bytes());
@@ -49,10 +49,12 @@ static border_symbol_mask: u32 = ((symbol_total-1) << border_excess) as u32;
 /// Gets probability ranges on the input, produces whole bytes of code on the output,
 /// where the code is an arbitrary fixed-ppoint value inside the resulting probability range.
 pub struct RangeEncoder {
-    // TODO: introduce a range struct
     priv low: Border,
     priv hai: Border,
-    priv threshold: Border,
+    /// The minimum distance between low and hai to keep at all times,
+    /// has to be at least the largest incoming 'total',
+    /// and optimally many times larger
+    threshold: Border,
 }
 
 impl RangeEncoder {
@@ -74,6 +76,8 @@ impl RangeEncoder {
     /// Yields stabilized code symbols (bytes) into the 'fn_shift' function
     pub fn process(&mut self, total: Border, from: Border, to: Border, fn_shift: |Symbol|) {
         let range = (self.hai - self.low) / total;
+        assert!(range>0, "RangeCoder range is too narrow [{}-{}) for the total {}",
+            self.low, self.hai, total);
         debug!("\t\tProcessing [{}-{})/{} with range {}", from, to, total, range);
         assert!(from < to);
         let mut lo = self.low + range*from;
@@ -132,10 +136,11 @@ pub trait Model {
 
 
 /// Arithmetic coding functions
+pub static range_default_threshold: Border = 1<<14;
 
 /// Encode 'value', using a model and a range encoder
 /// returns a list of output bytes
-pub fn encode<M: Model>(value: uint, model: &M, re: &mut RangeEncoder) -> ~[Symbol] {
+pub fn encode<M: Model>(value: Value, model: &M, re: &mut RangeEncoder) -> ~[Symbol] {
     let (lo, hi) = model.get_range(value);
     let mut accum: ~[Symbol] = ~[];
     let total = model.get_denominator();
@@ -146,7 +151,7 @@ pub fn encode<M: Model>(value: uint, model: &M, re: &mut RangeEncoder) -> ~[Symb
 
 /// Decode a value using given 'code' on the range encoder
 /// Returns a (value, num_symbols_to_shift) pair
-pub fn decode<M: Model>(code: Border, model: &M, re: &mut RangeEncoder) -> (uint,uint) {
+pub fn decode<M: Model>(code: Border, model: &M, re: &mut RangeEncoder) -> (Value,uint) {
     let total = model.get_denominator();
     let offset = re.query(total, code);
     let (value, lo, hi) = model.find_value(offset);
@@ -157,35 +162,211 @@ pub fn decode<M: Model>(code: Border, model: &M, re: &mut RangeEncoder) -> (uint
 }
 
 
+/// An arithmetic encoder helper
+pub struct Encoder<W> {
+    priv stream: W,
+    priv range: RangeEncoder,
+    priv bytes_written: uint,
+}
+
+impl<W: Writer> Encoder<W> {
+    /// Create a new encoder on top of a given Writer
+    pub fn new(w: W) -> Encoder<W> {
+        Encoder {
+            stream: w,
+            range: RangeEncoder::new(range_default_threshold),
+            bytes_written: 0,
+        }
+    }
+
+    /// Encode an abstract value under the given 'model'
+    pub fn encode<M: Model>(&mut self, value: Value, model: &M) -> io::IoResult<()> {
+        let bytes = encode(value, model, &mut self.range);
+        self.bytes_written += bytes.len();
+        self.stream.write(bytes)
+    }
+
+    /// Finish decoding by writing the code tail word
+    pub fn finish(mut self) -> (W, io::IoResult<()>) {
+        assert!(border_bits == 32);
+        self.bytes_written += 4;
+        let code = self.range.get_code_tail();
+        let result = self.stream.write_be_u32(code);
+        let result = result.and(self.stream.flush());
+        (self.stream, result)
+    }
+
+    /// Tell the number of bytes written so far
+    pub fn tell(&self) -> uint {
+        self.bytes_written
+    }
+}
+
+/// An arithmetic decoder helper
+pub struct Decoder<R> {
+    priv stream: R,
+    priv range: RangeEncoder,
+    priv code: Border,
+    priv bytes_read: uint,
+}
+
+impl<R: Reader> Decoder<R> {
+    /// Create a decoder on top of a given Reader
+    pub fn new(r: R) -> Decoder<R> {
+        Decoder {
+            stream: r,
+            range: RangeEncoder::new(range_default_threshold),
+            code: 0,
+            bytes_read: 0,
+        }
+    }
+
+    /// Start decoding by reading a full code word
+    pub fn start(&mut self) -> io::IoResult<()> {
+        assert!(border_bits == 32);
+        self.bytes_read += 4;
+        self.stream.read_be_u32().map(|code| {self.code=code})
+    }
+
+    /// Decode an abstract value based on the given model
+    pub fn decode<M: Model>(&mut self, model: &M) -> io::IoResult<Value> {
+        let (value,shift) = decode(self.code, model, &mut self.range);
+        self.bytes_read += shift;
+        for b in self.stream.bytes().take(shift) {
+            self.code = (self.code<<8) + (b as Border);
+        }
+        Ok(value)
+    }
+
+    /// Release the original reader
+    pub fn finish(self) -> R {
+        self.stream
+    }
+
+    /// Tell the number of bytes read so far
+    pub fn tell(&self) -> uint {
+        self.bytes_read
+    }
+}
+
+
+/// A binary value frequency model
+pub struct BinaryModel {
+    /// frequency of bit 0
+    priv zero: Border,
+    /// total frequency
+    priv total: Border,
+    /// maximum allowed sum of frequency,
+    /// should be smaller than RangeEncoder::threshold
+    priv cut_threshold: Border,
+    /// number of bits to shift on cut
+    priv cut_shift: uint,
+}
+
+impl BinaryModel {
+    /// Create a new flat (50/50 probability) instance
+    pub fn new_flat(threshold: Border) -> BinaryModel {
+        assert!(threshold > 2);
+        BinaryModel {
+            zero: 1,
+            total: 2,
+            cut_threshold: threshold,
+            cut_shift: 2
+        }
+    }
+    /// Create a new instance with a given percentage for zeroes
+    pub fn new_custom(zero_percent: u8, threshold: Border) -> BinaryModel {
+        assert!(threshold > 100);
+        BinaryModel {
+            zero: zero_percent as Border,
+            total: 100,
+            cut_threshold: threshold,
+            cut_shift: 2,
+        }
+    }
+    /// Update frequencies in favor of given 'value'
+    pub fn update(&mut self, value: Value, add_log: uint, add_const: Border) {
+        assert!(value < 2);
+        let add = (self.total>>add_log) + add_const;
+        debug!("\tUpdating by adding {} to value {}", add, value);
+        self.total += add;
+        if value==0 {
+            self.zero += add;
+        }
+        if self.total >= self.cut_threshold {
+            self.downscale();
+        }
+    }
+    /// Reduce frequencies by 'cut_iter' bits
+    pub fn downscale(&mut self) {
+        let roundup = (1<<self.cut_shift) - 1;
+        self.zero = (self.zero + roundup) >> self.cut_shift;
+        self.total = (self.total + roundup) >> self.cut_shift;
+    }
+}
+
+impl Model for BinaryModel {
+    fn get_range(&self, value: Value) -> (Border,Border) {
+        if value==0 {
+            (0, self.zero)
+        }else {
+            (self.zero, self.total)
+        }
+    }
+
+    fn find_value(&self, offset: Border) -> (Value,Border,Border) {
+        assert!(offset < self.total,
+            "Invalid frequency offset {} requested under total {}",
+            offset, self.total);
+        if offset < self.zero {
+            (0, 0, self.zero)
+        }else {
+            (1, self.zero, self.total)
+        }
+    }
+
+    fn get_denominator(&self) -> Border {
+        self.total
+    }
+}
+
+
 pub type Frequency = u16;
 
 /// A simple table of frequencies.
 pub struct FrequencyTable {
     /// sum of frequencies
-    priv total: Frequency,
+    priv total: Border,
     /// main table: value -> Frequency
     priv table: ~[Frequency],
-    /// number of LSB to shift on cut
+    /// maximum allowed sum of frequency,
+    /// should be smaller than RangeEncoder::threshold
+    priv cut_threshold: Border,
+    /// number of bits to shift on cut
     priv cut_shift: uint,
-    /// threshold value to trigger the cut
-    priv cut_threshold: Frequency,
 }
 
 impl FrequencyTable {
     /// Create a new table with frequencies initialized by a function
-    pub fn new_custom(num_values: uint, fn_init: |Value|-> Frequency) -> FrequencyTable {
+    pub fn new_custom(num_values: uint, threshold: Border, fn_init: |Value|-> Frequency) -> FrequencyTable {
         let freq = vec::from_fn(num_values, fn_init);
-        FrequencyTable {
-            total: freq.iter().fold(0, |u,&f| u+f),
+        let total = freq.iter().fold(0 as Border, |u,&f| u+(f as Border));
+        let mut ft = FrequencyTable {
+            total: total,
             table: freq,
+            cut_threshold: threshold,
             cut_shift: 1,
-            cut_threshold: 1<<12,
+        };
+        // downscale if needed
+        while ft.total >= threshold {
+            ft.downscale();
         }
+        ft
     }
 
     /// Create a new tanle with all frequencies being equal
-    pub fn new_flat(num_values: uint) -> FrequencyTable {
-        FrequencyTable::new_custom(num_values, |_| 1)
+    pub fn new_flat(num_values: uint, threshold: Border) -> FrequencyTable {
+        FrequencyTable::new_custom(num_values, threshold, |_| 1)
     }
 
     /// Reset the table to the flat state
@@ -193,182 +374,161 @@ impl FrequencyTable {
         for freq in self.table.mut_iter() {
             *freq = 1;
         }
-        self.total = self.table.len() as Frequency;
+        self.total = self.table.len() as Border;
     }
 
     /// Adapt the table in favor of given 'value'
     /// using 'add_log' and 'add_const' to produce the additive factor
     /// the higher 'add_log' is, the more concervative is the adaptation
-    pub fn update(&mut self, value: Value, add_log: uint, add_const: Frequency) {
+    pub fn update(&mut self, value: Value, add_log: uint, add_const: Border) {
         let add = (self.total>>add_log) + add_const;
-        assert!(add < self.cut_threshold);
-        self.table[value] += add;
-        self.total += add;
+        assert!(add < 2*self.cut_threshold);
         debug!("\tUpdating by adding {} to value {}", add, value);
+        self.table[value] += add as Frequency;
+        self.total += add;
         if self.total >= self.cut_threshold {
-            debug!("\tDownscaling frequencies");
-            self.total = 0;
-            let roundup = (1<<self.cut_shift) - 1;
-            for freq in self.table.mut_iter() {
-                // preserve non-zero frequencies to remain positive
-                *freq = (*freq+roundup) >> self.cut_shift;
-                self.total += *freq;
-            }
+            self.downscale();
+            assert!(self.total < self.cut_threshold);
+        }
+    }
+
+    /// Reduce frequencies by 'cut_iter' bits
+    pub fn downscale(&mut self) {
+        debug!("\tDownscaling frequencies");
+        let roundup = (1<<self.cut_shift) - 1;
+        self.total = 0;
+        for freq in self.table.mut_iter() {
+            // preserve non-zero frequencies to remain positive
+            *freq = (*freq+roundup) >> self.cut_shift;
+            self.total += *freq as Border;
         }
     }
 }
 
 impl Model for FrequencyTable {
     fn get_range(&self, value: Value) -> (Border,Border) {
-        let lo = self.table.slice_to(value).iter().fold(0, |u,&f| u+f);
-        (lo as Border, (lo + self.table[value]) as Border)
+        let lo = self.table.slice_to(value).iter().fold(0, |u,&f| u+(f as Border));
+        (lo, lo + (self.table[value] as Border))
     }
 
     fn find_value(&self, offset: Border) -> (Value,Border,Border) {
-        assert!(offset < self.total as Border,
+        assert!(offset < self.total,
             "Invalid frequency offset {} requested under total {}",
             offset, self.total);
         let mut value = 0u;
-        let mut lo = 0 as Frequency;
+        let mut lo = 0 as Border;
         let mut hi;
-        while {hi=lo+self.table[value]; hi} <= offset as Frequency {
+        while {hi=lo+(self.table[value] as Border); hi} <= offset {
             lo = hi;
             value += 1;
         }
-        (value, lo as Border, hi as Border)
+        (value, lo, hi)
     }
 
     fn get_denominator(&self) -> Border {
-        return self.total as Border
+        self.total
     }
 }
 
 
-/// Arithmetic Decoder
-//NOTE: decoder currently needs to know the output size. This can be worked around
-// by writing the size to the beginning of the stream. However, since Ari is
-// typically used in conjunction with the higher-level compression model, the size
-// can be known in advance.
-pub struct Decoder<R> {
-    /// The internally wrapped reader. This is exposed so it may be moved out
-    /// of. Note that if data is read from the reader while decoding is in
-    /// progress the output stream will get corrupted.
-    r: R,
-    priv output_left: uint,
-    priv re: RangeEncoder,
-    priv freq: FrequencyTable,
-    priv code: Border,
-    priv bytes_read: uint,
+/// A basic byte-encoding arithmetic
+pub struct ByteEncoder<W> {
+    /// A lower level encoder
+    encoder: Encoder<W>,
+    /// A basic frequency table
+    freq: FrequencyTable,
 }
 
-impl<R: Reader> Decoder<R> {
-    /// Create a decoder on top of a given Reader
-    /// requires the output size to be known
-    pub fn new(r: R, out_size: uint) -> Decoder<R> {
-        Decoder {
-            r: r,
-            output_left: out_size,
-            re: RangeEncoder::new(1<<14),
-            freq: FrequencyTable::new_flat(symbol_total),
-            code: 0,
-            bytes_read: 0,
+impl<W: Writer> ByteEncoder<W> {
+    /// Create a new encoder on top of a given Writer
+    pub fn new(w: W) -> ByteEncoder<W> {
+        let freq_max = range_default_threshold >> 2;
+        ByteEncoder {
+            encoder: Encoder::new(w),
+            freq: FrequencyTable::new_flat(symbol_total, freq_max),
         }
     }
+}
 
-    /// Start decoding by reading a full code word
-    fn start(&mut self) -> io::IoResult<()> {
-        assert!(border_bits == 32);
-        self.code = if_ok!(self.r.read_be_u32());
-        self.bytes_read += 4;
-        Ok(())
+impl<W: Writer> Writer for ByteEncoder<W> {
+    fn write(&mut self, buf: &[u8]) -> io::IoResult<()> {
+        buf.iter().fold(Ok(()), |result,byte| {
+            let value = *byte as Value;
+            let ret = self.encoder.encode(value, &self.freq);
+            self.freq.update(value, 10, 1);
+            result.and(ret)
+        })
     }
 }
 
-impl<R: Reader> Reader for Decoder<R> {
+
+/// A basic byte-decoding arithmetic
+//NOTE: it needs to know the output size for convenience.
+pub struct ByteDecoder<R> {
+    /// A lower level decoder
+    decoder: Decoder<R>,
+    /// A basic frequency table
+    freq: FrequencyTable,
+    priv output_left: uint,
+}
+
+impl<R: Reader> ByteDecoder<R> {
+    /// Create a decoder on top of a given Reader
+    /// requires the output size to be known
+    pub fn new(r: R, out_size: uint) -> ByteDecoder<R> {
+        let freq_max = range_default_threshold >> 2;
+        ByteDecoder {
+            decoder: Decoder::new(r),
+            freq: FrequencyTable::new_flat(symbol_total, freq_max),
+            output_left: out_size,
+        }
+    }
+}
+
+impl<R: Reader> Reader for ByteDecoder<R> {
     fn read(&mut self, dst: &mut [u8]) -> io::IoResult<uint> {
         if self.output_left == 0 {
             return Err(io::standard_error(io::EndOfFile))
         }
-        if self.bytes_read == 0 {
-            if_ok!(self.start());
+        if self.decoder.tell() == 0 {
+            if_ok!(self.decoder.start());
         }
         let write_len = num::min(dst.len(), self.output_left);
+        let mut ret = Ok(write_len);
         for out_byte in dst.mut_slice_to(write_len).mut_iter() {
-            let (byte,shift) = decode(self.code, &self.freq, &mut self.re);
-            self.freq.update(byte, 10, 1);
-            *out_byte = byte as u8;
-            for _ in range(0,shift) {
-                let byte = if_ok!(self.r.read_u8()) as Border;
-                self.bytes_read += 1;
-                self.code = (self.code<<8) + byte;
+            match self.decoder.decode(&self.freq) {
+                Ok(value) => {
+                    self.freq.update(value, 10, 1);
+                    *out_byte = value as u8;
+                },
+                Err(e) => {
+                    ret = Err(e);
+                    break
+                }
             }
         }
         self.output_left -= write_len;
-        Ok(write_len)
-    }
-}
-
-/// Arithmetic Encoder
-pub struct Encoder<W> {
-    priv w: W,
-    priv re: RangeEncoder,
-    priv freq: FrequencyTable,
-}
-
-impl<W: Writer> Encoder<W> {
-    /// Create a new encoder on top of a given Writer
-    pub fn new(w: W) -> Encoder<W> {
-        Encoder {
-            w: w,
-            re: RangeEncoder::new(1<<14),
-            freq: FrequencyTable::new_flat(symbol_total),
-        }
-    }
-
-    /// Reset the internal state to default
-    pub fn reset(&mut self) {
-        self.re.reset();
-        self.freq.reset_flat();
-    }
-
-    /// Finish decoding by writing the code tail word
-    pub fn finish(mut self) -> (W, io::IoResult<()>) {
-        assert!(border_bits == 32);
-        let code = self.re.get_code_tail();
-        let result = self.w.write_be_u32(code);
-        let result = result.and(self.w.flush());
-        (self.w, result)
-    }
-}
-
-impl<W: Writer> Writer for Encoder<W> {
-    fn write(&mut self, buf: &[u8]) -> io::IoResult<()> {
-        for byte in buf.iter() {
-            let value = *byte as uint;
-            let bytes = encode(value, &self.freq, &mut self.re);
-            self.freq.update(value, 10, 1);
-            if_ok!(self.w.write(bytes.as_slice()));
-        }
-        Ok(())
+        ret
     }
 }
 
 
 #[cfg(test)]
 mod test {
-    use std::io::{BufReader, MemWriter, SeekSet};
+    use std::io::{BufReader, BufWriter, MemWriter, SeekSet};
+    use std::vec;
     use extra::test;
-    use super::{Encoder,Decoder};
+    use super::{ByteEncoder, ByteDecoder};
 
     fn roundtrip(bytes: &[u8]) {
         info!("Roundtrip Ari of size {}", bytes.len());
-        let mut e = Encoder::new(MemWriter::new());
+        let mut e = ByteEncoder::new(MemWriter::new());
         e.write(bytes).unwrap();
-        let (e, r) = e.finish();
+        let (e, r) = e.encoder.finish();
         r.unwrap();
         let encoded = e.unwrap();
         debug!("Roundtrip input {:?} encoded {:?}", bytes, encoded);
-        let mut d = Decoder::new(BufReader::new(encoded), bytes.len());
+        let mut d = ByteDecoder::new(BufReader::new(encoded), bytes.len());
         let decoded = d.read_to_end().unwrap();
         assert_eq!(decoded.as_slice(), bytes);
     }
@@ -383,11 +543,12 @@ mod test {
     #[bench]
     fn compress_speed(bh: &mut test::BenchHarness) {
         let input = include_bin!("../data/test.txt");
-        let mut e = Encoder::new(MemWriter::with_capacity(input.len()));
+        let mut storage = vec::from_elem(input.len(), 0u8);
         bh.iter(|| {
-            e.w.seek(0, SeekSet).unwrap();
+            let mut w = BufWriter::new(storage);
+            w.seek(0, SeekSet).unwrap();
+            let mut e = ByteEncoder::new(w);
             e.write(input).unwrap();
-            e.reset();
         });
         bh.bytes = input.len() as u64;
     }

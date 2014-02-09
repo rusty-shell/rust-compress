@@ -31,7 +31,7 @@ Thanks to Edgar Binder for inventing DC!
 
 */
 
-use std::{iter, util, vec};
+use std::{io, iter, util, vec};
 
 pub type Symbol = u8;
 pub type Rank = u8;
@@ -108,8 +108,9 @@ pub fn encode(input: &[Symbol], distances: &mut [Distance], mtf: &mut MTF) -> ~[
             let rank = unique.len();
             mtf.symbols[rank] = sym;
             mtf.encode(sym);    //==rank
-            debug!("\t\tUnique => assigning rank {}, encoding {}", rank, i-rank);
-            unique.push((sym,i-rank))
+            // initial distances are not ordered to support re-shuffle
+            debug!("\t\tUnique => assigning rank {}, encoding {}", rank, i);
+            unique.push((sym,i))
         }else {
             let rank = mtf.encode(sym) as Distance;
             if rank > 0 {
@@ -139,8 +140,7 @@ pub fn encode_simple(input: &[Symbol]) -> (~[Symbol],~[Distance]) {
         let mut raw_dist = vec::from_elem(N, 0 as Distance);
         let pairs = encode(input, raw_dist.as_mut_slice(), &mut MTF::new());
         let symbols = pairs.map(|&(sym,_)| sym);
-        // skip the distance for the first unique symbol as it's always 0
-        let init_iter = pairs.iter().skip(1).map(|&(_,d)| d);
+        let init_iter = pairs.iter().map(|&(_,d)| d);
         // chain initial distances with intermediate ones
         let raw_iter = raw_dist.iter().filter_map(|&d| if d!=N {Some(d)} else {None});
         let mut combined = init_iter.chain(raw_iter);
@@ -148,40 +148,55 @@ pub fn encode_simple(input: &[Symbol]) -> (~[Symbol],~[Distance]) {
     }
 }
 
-/// decode a block of distances with a list of initial symbols
-pub fn decode(alphabet: &[Symbol], distances: &[Distance], output: &mut [Symbol], mtf: &mut MTF) {
+/// Decode a block of distances with a list of initial symbols
+pub fn decode(alphabet: Option<&[Symbol]>, output: &mut [Symbol], mtf: &mut MTF,
+        fn_dist: |Symbol|->io::IoResult<Distance>) -> io::IoResult<()> {
     let N = output.len();
-    let E = alphabet.len();
-    match alphabet  {
-        [] => {
+    let mut next = [N, ..TotalSymbols];
+    let E = match alphabet  {
+        Some([]) => {
+            // alphabet is empty
             assert_eq!(N,0);
-            return
+            return Ok(())
         },
-        [sym] => {
+        Some([sym]) => {
+            // there is only one known symbol
             for out in output.mut_iter()    {
                 *out = sym;
             }
-            return
+            return Ok(())
         }
-        _ => ()
-    }
-    assert!(1+distances.len() <= N + E);
-    let mut next = [N, ..TotalSymbols];
-    for (rank,&sym) in alphabet.iter().enumerate()   {
-        next[sym] = if rank==0 {
-            0 // not encoded, always 0
-        }else {
-            distances[rank-1] + (rank as Distance)
-        };
-        debug!("\tRegistering symbol {} of rank {} at position {}", sym, rank, next[sym]);
-        mtf.symbols[rank] = sym;
-    }
-    let mut di = E-1;
-    for rank in range(E,TotalSymbols) {
-        mtf.symbols[rank] = 0; //erazing unused symbols
-    }
+        Some(list) => {
+            // given fixed alphabet
+            for (rank,&sym) in list.iter().enumerate()   {
+                // initial distances are not ordered
+                next[sym] = match fn_dist(sym) {
+                    Ok(d) => d, // + (rank as Distance)
+                    Err(e) => return Err(e)
+                };
+                mtf.symbols[rank] = sym;
+                debug!("\tRegistering symbol {} of rank {} at position {}", sym, rank, next[sym]);
+            }
+            for rank in range(list.len(),TotalSymbols) {
+                mtf.symbols[rank] = 0; //erazing unused symbols
+            }
+            list.len()
+        },
+        None => {
+            // alphabet is large, total range of symbols is assumed
+            for i in range(0,TotalSymbols) {
+                next[i] = match fn_dist(i as Symbol) {
+                    Ok(d) => d,
+                    Err(e) => return Err(e)
+                };
+                mtf.symbols[i] = i as Symbol;
+                debug!("\tRegistering symbol {} at position {}", i, next[i]);
+            }
+            TotalSymbols
+        },
+    };
     let mut i = 0u;
-    while i<N && di<distances.len() {
+    while i<N {
         let sym = mtf.symbols[0];
         let stop = next[mtf.symbols[1]];
         debug!("\tFilling region [{}-{}) with symbol {}", i, stop, sym);
@@ -189,9 +204,11 @@ pub fn decode(alphabet: &[Symbol], distances: &[Distance], output: &mut [Symbol]
             output[i] = sym;
             i += 1;
         }
-        let future = stop + distances[di];
+        let future = match fn_dist(sym) {
+            Ok(d) => stop + d,
+            Err(e) => return Err(e)
+        };
         debug!("\t\tLooking for future position {}", future);
-        di += 1;
         let mut rank = 1u;
         while rank < E && future+rank > next[mtf.symbols[rank]] {
             mtf.symbols[rank-1] = mtf.symbols[rank];
@@ -201,20 +218,29 @@ pub fn decode(alphabet: &[Symbol], distances: &[Distance], output: &mut [Symbol]
             debug!("\t\tFound sym {} of rank {} at position {}", mtf.symbols[rank],
                 rank, next[mtf.symbols[rank]]);
         }else {
-            debug!("\t]tNot found");
+            debug!("\t\tNot found");
         }
         mtf.symbols[rank-1] = sym;
         debug!("\t\tAssigning future pos {} for symbol {}", future+rank-1, sym);
         next[sym] = future+rank-1;
     }
     assert_eq!(next.iter().position(|&d| d<N || d>=N+E), None);
-    assert_eq!((i,di), (N,distances.len()));
+    assert_eq!(i, N);
+    Ok(())
 }
 
 /// decode with "batteries included" for quick testing
 pub fn decode_simple(N: uint, alphabet: &[Symbol], distances: &[Distance]) -> ~[Symbol] {
     let mut output = vec::from_elem(N, 0 as Symbol);
-    decode(alphabet, distances, output.as_mut_slice(), &mut MTF::new());
+    let mut di = 0u;
+    decode(Some(alphabet), output.as_mut_slice(), &mut MTF::new(), |_sym| {
+        di += 1;
+        if di > distances.len() {
+            Err(io::standard_error(io::EndOfFile))
+        }else {
+            Ok(distances[di-1])
+        }
+    }).unwrap();
     output
 }
 
