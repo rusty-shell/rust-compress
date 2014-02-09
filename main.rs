@@ -53,31 +53,12 @@ impl Config {
     }
 }
 
-
-struct ReaderWrap(~Reader);
-impl Reader for ReaderWrap {
-    fn read(&mut self, buf: &mut [u8]) -> io::IoResult<uint> {
-        let &ReaderWrap(ref mut r) = self;
-        r.read(buf)
-    }
-}
-struct WriterWrap(~Writer);
-impl Writer for WriterWrap {
-    fn write(&mut self, buf: &[u8]) -> io::IoResult<()> {
-        let &WriterWrap(ref mut w) = self;
-        w.write(buf)
-    }
-    fn flush(&mut self) -> io::IoResult<()> {
-        let &WriterWrap(ref mut w) = self;
-        w.flush()
-    }
-}
-
 struct Pass {
     encode: 'static |~Writer,&Config| -> ~io::Writer,
     decode: 'static |~Reader,&Config| -> ~io::Reader,
     info: ~str,
 }
+
 
 /// main entry point
 pub fn main() {
@@ -90,38 +71,38 @@ pub fn main() {
     /* // unclear what to do with Ari since it requires the size to be known
     passes.insert(~"ari", Pass {
         encode: |w,_c| {
-            ~ari::ByteEncoder::new(WriterWrap(w)) as ~Writer
+            ~ari::ByteEncoder::new(w) as ~Writer
         },
         decode: |r,_c| {
-            ~ari::ByteDecoder::new(ReaderWrap(r)) as ~Reader
+            ~ari::ByteDecoder::new(r) as ~Reader
         },
         info: ~"Adaptive arithmetic byte coder",
     });*/
     passes.insert(~"bwt", Pass {
         encode: |w,c| {
-            ~bwt::Encoder::new(WriterWrap(w), c.block_size) as ~Writer
+            ~bwt::Encoder::new(w, c.block_size) as ~Writer
         },
         decode: |r,_c| {
-            ~bwt::Decoder::new(ReaderWrap(r), true) as ~Reader
+            ~bwt::Decoder::new(r, true) as ~Reader
         },
         info: ~"Burrows-Wheeler Transformation",
     });
     /* // looks like we are missing the encoder implementation
     passes.insert(~"flate", Pass {
         encode: |w,_c| {
-            ~flate::Encoder::new(WriterWrap(w), true) as ~Writer
+            ~flate::Encoder::new(w, true) as ~Writer
         },
         decode: |r,_c| {
-            ~flate::Decoder::new(ReaderWrap(r), true) as ~Reader
+            ~flate::Decoder::new(r, true) as ~Reader
         },
-        info: ~"Standartized Ziv-Lempel + Huffman variant",
+        info: ~"Standardized Ziv-Lempel + Huffman variant",
     });*/
     passes.insert(~"lz4", Pass {
         encode: |w,_c| {
-            ~lz4::Encoder::new(WriterWrap(w)) as ~Writer
+            ~lz4::Encoder::new(w) as ~Writer
         },
         decode: |r,_c| { // LZ4 decoder seem to work
-            ~lz4::Decoder::new(ReaderWrap(r)) as ~Reader
+            ~lz4::Decoder::new(r) as ~Reader
         },
         info: ~"Ziv-Lempel derivative, focused at speed",
     });
@@ -155,7 +136,7 @@ pub fn main() {
                 None => fail!("Pass is not implemented"),
             }
         }
-        io::util::copy(&mut ReaderWrap(rsum), &mut output).unwrap();
+        io::util::copy(&mut rsum, &mut output).unwrap();
     }else if config.methods.is_empty() {
         println!("rust-compress test application");
         println!("Usage:");
@@ -181,8 +162,7 @@ pub fn main() {
                 None => fail!("Pass {} is not implemented", *met)
             }
         }
-        let mut wrap = WriterWrap(wsum);
-        io::util::copy(&mut input, &mut wrap).unwrap();
-        wrap.flush().unwrap();
+        io::util::copy(&mut input, &mut wsum).unwrap();
+        wsum.flush().unwrap();
     }
 }

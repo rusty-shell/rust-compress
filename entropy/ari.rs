@@ -22,7 +22,7 @@ e.write_str(text);
 let (encoded, _) = e.encoder.finish();
 
 // Decode the encoded text
-let mut d = ari::ByteDecoder::new(MemReader::new(encoded.unwrap());
+let mut d = ari::ByteDecoder::new(MemReader::new(encoded.unwrap()));
 let decoded = d.read_bytes(text.len()).unwrap();
 ```
 
