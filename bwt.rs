@@ -49,25 +49,27 @@ This is an original (mostly trivial) implementation.
 
 use std::{io, iter, num, vec};
 
+pub static total_symbols: uint = 0x100;
+
 /// Radix sorting primitive
 pub struct Radix    {
     /// number of occurancies (frequency) per symbox
-    freq    : [uint,..0x101],
+    freq    : [uint, ..total_symbols+1],
 }
 
 impl Radix  {
     /// create Radix sort instance
     pub fn new() -> Radix   {
         Radix   {
-            freq : [0,..0x101],
+            freq : [0, ..total_symbols+1],
         }
     }
 
     /// reset counters
     /// allows the struct to be re-used
     pub fn reset(&mut self) {
-        for i in range(0,0x101)   {
-            self.freq[i] = 0;
+        for fr in self.freq.mut_iter()   {
+            *fr = 0;
         }
     }
 
@@ -81,12 +83,11 @@ impl Radix  {
     /// build offset table
     pub fn accumulate(&mut self)    {
         let mut n = 0;
-        for i in range(0,0x100)   {
-            let f = self.freq[i];
-            self.freq[i] = n;
+        for freq in self.freq.mut_iter() {
+            let f = *freq;
+            *freq = n;
             n += f;
         }
-        self.freq[0x100] = n;
     }
 
     /// return next byte position, advance it internally
@@ -102,8 +103,8 @@ impl Radix  {
     /// shift frequences to the left
     /// allows the offsets to be re-used after all positions are obtained
     pub fn shift(&mut self) {
-        assert_eq!( self.freq[0x100], self.freq[0x100] );
-        for i in iter::range_inclusive(1,0x100).rev()   {
+        assert_eq!( self.freq[total_symbols-1], self.freq[total_symbols] );
+        for i in iter::range_inclusive(1,total_symbols).rev()   {
             self.freq[i] = self.freq[i-1];
         }
         self.freq[0] = 0;
@@ -126,16 +127,24 @@ pub fn encode_brute(input: &[u8], suf: &mut [Suffix], fn_out: |u8|) -> Suffix {
     radix.accumulate();
 
     debug!("encode input: {:?}", input);
+    debug!("radix offsets: {:?}", radix.freq);
 
     for (i,&ch) in input.iter().enumerate() {
         let p = radix.place(ch);
         suf[p] = i;
     }
 
-    for i in range(0,0x100)   {
+    // bring the original offsets back
+    radix.shift();
+
+    for i in range(0,total_symbols)   {
         let lo = radix.freq[i];
         let hi = radix.freq[i+1];
+        if lo == hi {
+            continue
+        }
         let slice = suf.mut_slice(lo,hi);
+        debug!("sorting group [{}-{}) for symbol {}", lo, hi, i);
         slice.sort_by(|&a,&b| {
             iter::order::cmp(
                 input.slice_from(a).iter(),
@@ -190,7 +199,7 @@ pub fn decode_std(input: &[u8], origin: Suffix, suf: &mut [Suffix], fn_out: |u8|
     // the input stream virtually has $ inserted at origin
     for (i,&ch) in input.iter().enumerate() {
         let p = radix.place(ch);
-        suf[p] = if i<origin {i} else {i+1};;
+        suf[p] = if i<origin {i} else {i+1};
     }
     //suf[-1] = origin;
 
@@ -280,10 +289,14 @@ impl<R: Reader> Decoder<R> {
     }
 
     fn read_header(&mut self) -> io::IoResult<()> {
-        self.max_block_size = if_ok!(self.r.read_le_u32()) as uint;
-        debug!("max size: {}", self.max_block_size);
-
-        return Ok(());
+        match self.r.read_le_u32() {
+            Ok(size) => {
+                self.max_block_size = size as uint; 
+                debug!("max size: {}", self.max_block_size);
+                Ok(())
+            },
+            Err(e) => Err(e),
+        }
     }
 
     fn decode_block(&mut self) -> io::IoResult<bool> {
@@ -294,7 +307,6 @@ impl<R: Reader> Decoder<R> {
         };
         if n == 0 { return Ok(false) }
 
-        // TODO: insert a dummy $ to avoid an extra if later on
         self.temp.truncate(0);
         self.temp.reserve(n);
         if_ok!(self.r.push_bytes(&mut self.temp, n));
@@ -420,11 +432,12 @@ impl<W: Writer> Writer for Encoder<W> {
     }
 
     fn flush(&mut self) -> io::IoResult<()> {
-        if self.buf.len() > 0 {
+        let ret = if self.buf.len() > 0 {
             self.encode_block()
         } else {
             Ok(())
-        }
+        };
+        ret.and(self.w.flush())
     }
 }
 
