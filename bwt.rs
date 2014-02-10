@@ -167,7 +167,6 @@ pub fn encode_brute(input: &[u8], suf: &mut [Suffix], fn_out: |u8|) -> Suffix {
         }
     }
 
-    assert!( origin.is_some() );
     origin.unwrap()
 }
 
@@ -335,7 +334,7 @@ impl<R: Reader> Reader for Decoder<R> {
             self.header = true;
         }
         let mut amt = dst.len();
-        let len = amt;
+        let dst_len = amt;
 
         while amt > 0 {
             if self.output.len() == self.start {
@@ -344,19 +343,19 @@ impl<R: Reader> Reader for Decoder<R> {
                    break
                 }
             }
-            let n = num::min( amt, self.output.len() - self.start );
+            let n = num::min(amt, self.output.len() - self.start);
             vec::bytes::copy_memory(
-                dst.mut_slice_from(len - amt),
-                self.output.slice_from(self.start)
+                dst.mut_slice_from(dst_len - amt),
+                self.output.slice(self.start, self.start + n)
                 );
             self.start += n;
             amt -= n;
         }
 
-        if len == amt {
+        if dst_len == amt {
             Err(io::standard_error(io::EndOfFile))
         } else {
-            Ok(len - amt)
+            Ok(dst_len - amt)
         }
     }
 }
