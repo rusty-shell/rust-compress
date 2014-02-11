@@ -22,10 +22,8 @@ e.write_str(text);
 let (encoded, _) = e.encoder.finish();
 
 // Decode the encoded text
-let mut d = ari::ByteDecoder::new(MemReader::new(encoded.unwrap()), text.len());
-let decoded = d.read_to_end().unwrap();
-
-assert_eq!(decoded.as_slice(), text.as_bytes());
+let mut d = ari::ByteDecoder::new(MemReader::new(encoded.unwrap()));
+let decoded = d.read_bytes(text.len()).unwrap();
 ```
 
 # Credit
@@ -34,7 +32,7 @@ This is an original implementation.
 
 */
 
-use std::{num, io, vec};
+use std::{io, vec};
 
 pub type Symbol = u8;
 static symbol_bits: uint = 8;
@@ -194,6 +192,11 @@ impl<W: Writer> Encoder<W> {
         let result = self.stream.write_be_u32(code);
         let result = result.and(self.stream.flush());
         (self.stream, result)
+    }
+
+    /// Flush the output stream
+    pub fn flush(&mut self) -> io::IoResult<()> {
+        self.stream.flush()
     }
 
     /// Tell the number of bytes written so far
@@ -459,43 +462,40 @@ impl<W: Writer> Writer for ByteEncoder<W> {
             result.and(ret)
         })
     }
+
+    fn flush(&mut self) -> io::IoResult<()> {
+        self.encoder.flush()
+    }
 }
 
 
 /// A basic byte-decoding arithmetic
-//NOTE: it needs to know the output size for convenience.
 pub struct ByteDecoder<R> {
     /// A lower level decoder
     decoder: Decoder<R>,
     /// A basic frequency table
     freq: FrequencyTable,
-    priv output_left: uint,
 }
 
 impl<R: Reader> ByteDecoder<R> {
     /// Create a decoder on top of a given Reader
     /// requires the output size to be known
-    pub fn new(r: R, out_size: uint) -> ByteDecoder<R> {
+    pub fn new(r: R) -> ByteDecoder<R> {
         let freq_max = range_default_threshold >> 2;
         ByteDecoder {
             decoder: Decoder::new(r),
             freq: FrequencyTable::new_flat(symbol_total, freq_max),
-            output_left: out_size,
         }
     }
 }
 
 impl<R: Reader> Reader for ByteDecoder<R> {
     fn read(&mut self, dst: &mut [u8]) -> io::IoResult<uint> {
-        if self.output_left == 0 {
-            return Err(io::standard_error(io::EndOfFile))
-        }
         if self.decoder.tell() == 0 {
             if_ok!(self.decoder.start());
         }
-        let write_len = num::min(dst.len(), self.output_left);
-        let mut ret = Ok(write_len);
-        for out_byte in dst.mut_slice_to(write_len).mut_iter() {
+        let mut ret = Ok(dst.len());
+        for out_byte in dst.mut_iter() {
             match self.decoder.decode(&self.freq) {
                 Ok(value) => {
                     self.freq.update(value, 10, 1);
@@ -507,7 +507,6 @@ impl<R: Reader> Reader for ByteDecoder<R> {
                 }
             }
         }
-        self.output_left -= write_len;
         ret
     }
 }
@@ -528,9 +527,9 @@ mod test {
         r.unwrap();
         let encoded = e.unwrap();
         debug!("Roundtrip input {:?} encoded {:?}", bytes, encoded);
-        let mut d = ByteDecoder::new(BufReader::new(encoded), bytes.len());
-        let decoded = d.read_to_end().unwrap();
-        assert_eq!(decoded.as_slice(), bytes);
+        let mut d = ByteDecoder::new(BufReader::new(encoded));
+        let decoded = d.read_bytes(bytes.len()).unwrap();
+        assert_eq!(bytes.as_slice(), decoded.as_slice());
     }
 
     #[test]
