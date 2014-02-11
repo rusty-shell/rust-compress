@@ -4,12 +4,9 @@ before_install:
 install:
   - sudo apt-get install rust-nightly
 script:
-  - rustc --crate-type=dylib lib.rs
-  - rustc --test lib.rs
-  - ls
-  - ./compress
-  - rustdoc --test -L. lib.rs
-  - rustdoc lib.rs
+  - make
+  - make check
+  - make docs
 after_script:
   - curl http://www.rust-ci.org/artifacts/put?t=$RUSTCI_TOKEN | sh
 env:
