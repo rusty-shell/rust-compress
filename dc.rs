@@ -31,7 +31,7 @@ Thanks to Edgar Binder for inventing DC!
 
 */
 
-use std::{io, iter, util, vec};
+use std::{io, iter, mem, vec};
 
 pub type Symbol = u8;
 pub type Rank = u8;
@@ -66,7 +66,7 @@ impl MTF {
         }
         let mut rank: Rank = 1u8;
         loop {
-            util::swap(&mut self.symbols[rank], &mut next);
+            mem::swap(&mut self.symbols[rank], &mut next);
             if next == sym {
                 break;
             }
