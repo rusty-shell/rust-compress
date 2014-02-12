@@ -227,11 +227,11 @@ pub fn decode_mem(input: &[u8], origin: Suffix, suf: &mut [Suffix], output: &mut
 /// Run time: O(n^2), Memory: 0n
 fn decode_minimal(input: &[u8], origin: Suffix, output: &mut [u8]) {
     assert_eq!(input.len(), output.len());
-    
+
     let mut radix = Radix::new();
     radix.gather(input);
     radix.accumulate();
-    
+
     let n = input.len();
     let mut i = 0;
     for j in range(0,n) {
@@ -291,7 +291,7 @@ impl<R: Reader> Decoder<R> {
     fn read_header(&mut self) -> io::IoResult<()> {
         match self.r.read_le_u32() {
             Ok(size) => {
-                self.max_block_size = size as uint; 
+                self.max_block_size = size as uint;
                 debug!("max size: {}", self.max_block_size);
                 Ok(())
             },
@@ -394,12 +394,13 @@ impl<W: Writer> Encoder<W> {
 
         self.suf.truncate(0);
         self.suf.grow_fn(n, |_| n);
+        let w = &mut self.w;
 
-        let origin = encode_brute(self.buf, self.suf, |ch| self.w.write_u8(ch).unwrap());
-        
-        if_ok!(self.w.write_le_u32(origin as u32));
+        let origin = encode_brute(self.buf, self.suf, |ch| w.write_u8(ch).unwrap());
+
+        if_ok!(w.write_le_u32(origin as u32));
         self.buf.truncate(0);
-        
+
         Ok(())
     }
 

@@ -35,14 +35,16 @@ impl Config {
             block_size: 1<<16,
             decompress: false,
         };
-        let mut handlers: HashMap<&str,|&str|> = HashMap::new();
-        handlers.insert(&"d",|_| { cfg.decompress = true; });
-        handlers.insert(&"block",|b| { cfg.block_size = from_str(b).unwrap(); });
-        
+        let mut handlers: HashMap<&str,|&str, &mut Config|> = HashMap::new();
+        handlers.insert(&"d",|_, cfg| { cfg.decompress = true; });
+        handlers.insert(&"block",|b, cfg| {
+            cfg.block_size = from_str(b).unwrap();
+        });
+
         for arg in args.iter().skip(1) {
             if arg.starts_with(&"-") {
                 match handlers.iter().find(|&(&k,_)| arg.slice_from(1).starts_with(k)) {
-                    Some((k,h)) => (*h)(arg.slice_from(1+k.len())),
+                    Some((k,h)) => (*h)(arg.slice_from(1+k.len()), &mut cfg),
                     None => println!("Warning: unrecognized option: {}", *arg),
                 }
             }else {
