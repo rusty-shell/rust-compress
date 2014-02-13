@@ -2,8 +2,8 @@ RUSTC = rustc
 RUSTDOC = rustdoc
 RUSTFLAGS = -O
 BUILDDIR = build
-COMPRESS = $(foreach lib,$(shell $(RUSTC) --crate-file-name lib.rs),\
-	      $(BUILDDIR)/$(lib))
+COMPRESS = $(BUILDDIR)/$(filter-out %.dylib,\
+	      $(shell $(RUSTC) --crate-file-name lib.rs))
 APP = $(BUILDDIR)/$(shell $(RUSTC) --crate-file-name main.rs)
 
 LIBTEST = $(BUILDDIR)/test/$(shell $(RUSTC) --crate-file-name --test lib.rs)
