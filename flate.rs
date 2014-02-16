@@ -22,7 +22,7 @@
 //! * http://svn.ghostscript.com/ghostscript/trunk/gs/zlib/contrib/puff/puff.c -
 //!   Much of this code is based on the puff.c implementation found here
 
-use std::num;
+use std::cmp;
 use std::io;
 use std::vec;
 
@@ -206,7 +206,7 @@ impl<R: Reader> Decoder<R> {
         }
         let amt = to - from;
         let remaining = HISTORY - self.outpos;
-        let n = num::min(amt, remaining);
+        let n = cmp::min(amt, remaining);
         if self.output.len() < HISTORY {
             self.output.push_all(self.block.slice(from, from + n));
         } else {
@@ -310,7 +310,7 @@ impl<R: Reader> Decoder<R> {
                     } else {
                         HISTORY - (dist - self.outpos)
                     };
-                    let min = num::min(dist, len);
+                    let min = cmp::min(dist, len);
                     let start = self.block.len();
                     for _ in range(0, min) {
                         self.block.push(self.output[finger]);
@@ -458,7 +458,7 @@ impl<R: Reader> Reader for Decoder<R> {
             if self.eof { return Err(io::standard_error(io::EndOfFile)) }
             if_ok!(self.block());
         }
-        let n = num::min(buf.len(), self.block.len() - self.pos);
+        let n = cmp::min(buf.len(), self.block.len() - self.pos);
         vec::bytes::copy_memory(buf.mut_slice_to(n),
                                 self.block.slice(self.pos, self.pos + n));
         self.pos += n;

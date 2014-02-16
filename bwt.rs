@@ -47,7 +47,7 @@ This is an original (mostly trivial) implementation.
 
 */
 
-use std::{io, iter, num, vec};
+use std::{io, iter, cmp, vec};
 
 pub static total_symbols: uint = 0x100;
 
@@ -343,7 +343,7 @@ impl<R: Reader> Reader for Decoder<R> {
                    break
                 }
             }
-            let n = num::min(amt, self.output.len() - self.start);
+            let n = cmp::min(amt, self.output.len() - self.start);
             vec::bytes::copy_memory(
                 dst.mut_slice_from(dst_len - amt),
                 self.output.slice(self.start, self.start + n)
@@ -420,7 +420,7 @@ impl<W: Writer> Writer for Encoder<W> {
         }
 
         while buf.len() > 0 {
-            let amt = num::min( self.block_size - self.buf.len(), buf.len() );
+            let amt = cmp::min( self.block_size - self.buf.len(), buf.len() );
             self.buf.push_all( buf.slice_to(amt) );
 
             if self.buf.len() == self.block_size {

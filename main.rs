@@ -9,7 +9,7 @@
 //! echo -n "abracadabra" | ./app bwt | xxd
 //! echo "banana" | ./app bwt | ./app -d
 
-extern mod compress;
+extern crate compress;
 
 
 use std::hashmap::HashMap;

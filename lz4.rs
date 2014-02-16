@@ -24,7 +24,7 @@ can be found at https://github.com/bkaradzic/go-lz4.
 */
 
 use std::io;
-use std::num;
+use std::cmp;
 use std::vec;
 
 static MAGIC: u32 = 0x184d2204;
@@ -257,7 +257,7 @@ impl<R: Reader> Decoder<R> {
                 self.temp.reserve(n);
                 if_ok!(self.r.push_bytes(&mut self.temp, n));
 
-                let target = num::min(self.max_block_size, 4 * n / 3);
+                let target = cmp::min(self.max_block_size, 4 * n / 3);
                 self.output.truncate(0);
                 self.output.reserve(target);
                 let mut decoder = BlockDecoder {
@@ -301,7 +301,7 @@ impl<R: Reader> Reader for Decoder<R> {
                     break;
                 }
             }
-            let n = num::min(amt, self.end - self.start);
+            let n = cmp::min(amt, self.end - self.start);
             vec::bytes::copy_memory(dst.mut_slice_from(len - amt),
                                     self.output.slice(self.start, self.start + n));
             self.start += n;
@@ -384,7 +384,7 @@ impl<W: Writer> Writer for Encoder<W> {
         }
 
         while buf.len() > 0 {
-            let amt = num::min(self.limit - self.buf.len(), buf.len());
+            let amt = cmp::min(self.limit - self.buf.len(), buf.len());
             self.buf.push_all(buf.slice_to(amt));
 
             if self.buf.len() == self.limit {
