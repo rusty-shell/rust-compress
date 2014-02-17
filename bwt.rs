@@ -47,12 +47,10 @@ This is an original (mostly trivial) implementation.
 
 */
 
-use std::{io, iter, cmp, vec};
+use std::{cmp, io, iter, vec};
 
 /// A base element for the transformation
 pub type Symbol = u8;
-/// An index to a substring
-pub type Suffix = uint;
 
 pub static ALPHABET_SIZE: uint = 0x100;
 
@@ -120,7 +118,7 @@ impl Radix  {
 /// Compute a suffix array from a given input string
 /// Resulting suffixes are guaranteed to be alphabetically sorted
 /// Run time: O(N^3), memory: N words (suf_array) + ALPHABET_SIZE words (Radix)
-pub fn compute_suffixes(input: &[Symbol], suf_array: &mut [Suffix]) {
+pub fn compute_suffixes<SUF: NumCast + ToPrimitive>(input: &[Symbol], suf_array: &mut [SUF]) {
     let mut radix = Radix::new();
     radix.gather(input);
     radix.accumulate();
@@ -130,7 +128,7 @@ pub fn compute_suffixes(input: &[Symbol], suf_array: &mut [Suffix]) {
 
     for (i,&ch) in input.iter().enumerate() {
         let p = radix.place(ch);
-        suf_array[p] = i;
+        suf_array[p] = NumCast::from(i).unwrap();
     }
 
     // bring the original offsets back
@@ -144,10 +142,10 @@ pub fn compute_suffixes(input: &[Symbol], suf_array: &mut [Suffix]) {
         }
         let slice = suf_array.mut_slice(lo,hi);
         debug!("\tsorting group [{}-{}) for symbol {}", lo, hi, i);
-        slice.sort_by(|&a,&b| {
+        slice.sort_by(|a,b| {
             iter::order::cmp(
-                input.slice_from(a).iter(),
-                input.slice_from(b).iter())
+                input.slice_from(a.to_uint().unwrap()).iter(),
+                input.slice_from(b.to_uint().unwrap()).iter())
         });
     }
 
@@ -155,15 +153,15 @@ pub fn compute_suffixes(input: &[Symbol], suf_array: &mut [Suffix]) {
 }
 
 /// An iterator over BWT output
-pub struct TransformIterator<'a> {
+pub struct TransformIterator<'a, SUF> {
     priv input      : &'a [Symbol],
-    priv suf_iter   : iter::Enumerate<vec::Items<'a,Suffix>>,
+    priv suf_iter   : iter::Enumerate<vec::Items<'a,SUF>>,
     priv origin     : Option<uint>,
 }
 
-impl<'a> TransformIterator<'a> {
+impl<'a, SUF> TransformIterator<'a, SUF> {
     /// create a new BWT iterator from the suffix array
-    pub fn new(input: &'a [Symbol], suffixes: &'a [Suffix]) -> TransformIterator<'a> {
+    pub fn new(input: &'a [Symbol], suffixes: &'a [SUF]) -> TransformIterator<'a, SUF> {
         TransformIterator {
             input: input,
             suf_iter: suffixes.iter().enumerate(),
@@ -177,30 +175,30 @@ impl<'a> TransformIterator<'a> {
     }
 }
 
-impl<'a> Iterator<Symbol> for TransformIterator<'a> {
+impl<'a, SUF: ToPrimitive> Iterator<Symbol> for TransformIterator<'a, SUF> {
     fn next(&mut self) -> Option<Symbol> {
-        self.suf_iter.next().map(|(i,&p)| {
-            if p == 0 {
+        self.suf_iter.next().map(|(i,p)| {
+            if p.to_uint().unwrap() == 0 {
                 assert!( self.origin.is_none() );
                 self.origin = Some(i);
                 *self.input.last().unwrap()
             }else {
-                self.input[p-1]
+                self.input[p.to_uint().unwrap() - 1]
             }
         })
     }
 }
 
 /// Encode BWT of a given input, using the 'suf_array'
-pub fn encode<'a>(input: &'a [Symbol], suf_array: &'a mut [Suffix]) -> TransformIterator<'a> {
+pub fn encode<'a, SUF: NumCast + ToPrimitive>(input: &'a [Symbol], suf_array: &'a mut [SUF]) -> TransformIterator<'a, SUF> {
     compute_suffixes(input, suf_array);
     TransformIterator::new(input, suf_array)
 }
 
 /// Transform an input block into the output slice, all-inclusive version.
 /// Returns the index of the original string in the output matrix.
-pub fn encode_simple(input: &[Symbol]) -> (~[Symbol], Suffix) {
-    let mut suf_array = vec::from_elem(input.len(), 0 as Suffix);
+pub fn encode_simple(input: &[Symbol]) -> (~[Symbol], uint) {
+    let mut suf_array = vec::from_elem(input.len(), 0u);
     let mut iter = encode(input, suf_array);
     let output = iter.to_owned_vec();
     (output, iter.get_origin())
@@ -208,19 +206,19 @@ pub fn encode_simple(input: &[Symbol]) -> (~[Symbol], Suffix) {
 
 
 /// Compute an inversion jump table, needed for BWT decoding
-pub fn compute_inversion_table(input: &[Symbol], origin: uint, table: &mut [Suffix]) {
+pub fn compute_inversion_table<SUF: NumCast>(input: &[Symbol], origin: uint, table: &mut [SUF]) {
     assert_eq!(input.len(), table.len());
 
     let mut radix = Radix::new();
     radix.gather(input);
     radix.accumulate();
 
-    table[radix.place(input[origin])] = 0;
+    table[radix.place(input[origin])] = NumCast::from(0).unwrap();
     for (i,&ch) in input.slice_to(origin).iter().enumerate() {
-        table[radix.place(ch)] = (i+1) as Suffix;
+        table[radix.place(ch)] = NumCast::from(i+1).unwrap();
     }
     for (i,&ch) in input.slice_from(origin+1).iter().enumerate() {
-        table[radix.place(ch)] = (origin+2+i) as Suffix;
+        table[radix.place(ch)] = NumCast::from(origin+2+i).unwrap();
     }
     //table[-1] = origin;
     debug!("inverse table: {:?}", table)
@@ -228,37 +226,37 @@ pub fn compute_inversion_table(input: &[Symbol], origin: uint, table: &mut [Suff
 
 /// An iterator over inverse BWT
 /// Run time: O(N), memory: N words (table)
-pub struct InverseIterator<'a> {
+pub struct InverseIterator<'a, SUF> {
     priv input      : &'a [Symbol],
-    priv table      : &'a [Suffix],
+    priv table      : &'a [SUF],
     priv origin     : uint,
-    priv current    : Suffix,
+    priv current    : uint,
 }
 
-impl<'a> InverseIterator<'a> {
+impl<'a, SUF> InverseIterator<'a, SUF> {
     /// create a new inverse BWT iterator with a given input, origin, and a jump table
-    pub fn new(input: &'a [Symbol], origin: uint, table: &'a [Suffix]) -> InverseIterator<'a> {
+    pub fn new(input: &'a [Symbol], origin: uint, table: &'a [SUF]) -> InverseIterator<'a, SUF> {
         debug!("inverse origin={}, input: {:?}", origin, input);
         InverseIterator {
             input: input,
             table: table,
             origin: origin,
-            current: origin as Suffix,
+            current: origin,
         }
     }
 }
 
-impl<'a> Iterator<Symbol> for InverseIterator<'a> {
+impl<'a, SUF: ToPrimitive> Iterator<Symbol> for InverseIterator<'a, SUF> {
     fn next(&mut self) -> Option<Symbol> {
         if self.current == -1 {
             None
         }else {
-            self.current = self.table[self.current] - 1;
+            self.current = self.table[self.current].to_uint().unwrap() - 1;
             debug!("\tjumped to {}", self.current);
             let p = if self.current!=-1 {
                 self.current
             }else {
-                self.origin as Suffix
+                self.origin
             };
             Some(self.input[p])
         }
@@ -266,20 +264,20 @@ impl<'a> Iterator<Symbol> for InverseIterator<'a> {
 }
 
 /// Decode a BWT block, given it's origin, and using 'table' temporarily
-pub fn decode<'a>(input: &'a [Symbol], origin: uint, table: &'a mut [Suffix]) -> InverseIterator<'a> {
+pub fn decode<'a, SUF: NumCast>(input: &'a [Symbol], origin: uint, table: &'a mut [SUF]) -> InverseIterator<'a, SUF> {
     compute_inversion_table(input, origin, table);
     InverseIterator::new(input, origin, table)
 }
 
 /// A simplified BWT decode function, which allocates a temporary suffix array
 pub fn decode_simple(input: &[Symbol], origin: uint) -> ~[Symbol] {
-    let mut suf = vec::from_elem(input.len(), 0 as Suffix);
+    let mut suf = vec::from_elem(input.len(), 0 as uint);
     decode(input, origin, suf).take(input.len()).to_owned_vec()
 }
 
 /// Decode without additional memory, can be greatly optimized
 /// Run time: O(n^2), Memory: 0n
-fn decode_minimal(input: &[Symbol], origin: Suffix, output: &mut [Symbol]) {
+fn decode_minimal(input: &[Symbol], origin: uint, output: &mut [Symbol]) {
     assert_eq!(input.len(), output.len());
     if input.len() == 0 {
         assert_eq!(origin, 0);
@@ -511,7 +509,7 @@ mod test {
     use extra::test;
     use std::io::{BufReader, MemWriter};
     use std::vec;
-    use super::{encode, decode, Suffix, Decoder, Encoder};
+    use super::{encode, decode, Decoder, Encoder};
 
     fn roundtrip(bytes: &[u8], extra_mem: bool) {
         let mut e = Encoder::new(MemWriter::new(), 1<<10);
@@ -541,7 +539,7 @@ mod test {
     fn decode_speed(bh: &mut test::BenchHarness) {
         let input = include_bin!("data/test.txt");
         let n = input.len();
-        let mut suf = vec::from_elem(n, 0 as Suffix);
+        let mut suf = vec::from_elem(n, 0u16);
         let (output, origin) = {
             let mut to_iter = encode(input, suf);
             let out = to_iter.to_owned_vec();
