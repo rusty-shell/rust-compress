@@ -547,7 +547,7 @@ mod test {
         };
         bh.iter(|| {
             let mut from_iter = decode(output, origin, suf);
-            assert_eq!(from_iter.last(), Some(input[origin]));
+            from_iter.last().unwrap();
         });
         bh.bytes = n as u64;
     }

@@ -3,14 +3,9 @@
 DC (Distance Coding) forward and backward transformation.
 Designed to be used on BWT block output for compression.
 
-MTF (Move To Front) encoder/decoder:
-Used internally for DC processing.
-Can also be used separately on the BWT output as an alternative to DC.
-
 # Links
 
 http://www.data-compression.info/Algorithms/DC/
-http://en.wikipedia.org/wiki/Move-to-front_transform
 
 # Example
 
@@ -31,62 +26,12 @@ Thanks to Edgar Binder for inventing DC!
 
 */
 
-use std::{io, iter, mem, vec};
+use std::{io, vec};
+use post_bwt::mtf::MTF;
 
 pub type Symbol = u8;
 pub type Rank = u8;
 pub static TotalSymbols: uint = 0x100;
-
-
-/// MoveToFront encoder/decoder
-pub struct MTF {
-    /// rank-ordered list of unique Symbols
-    symbols: [Symbol, ..TotalSymbols],
-}
-
-impl MTF {
-    /// create a new zeroed MTF
-    pub fn new() -> MTF {
-        MTF { symbols: [0, ..TotalSymbols] }
-    }
-
-    /// set the order of symbols to be alphabetical
-    pub fn reset_alphabetical(&mut self) {
-        for (i,sym) in self.symbols.mut_iter().enumerate() {
-            *sym = i as Symbol;
-        }
-    }
-
-    /// encode a symbol into its rank
-    pub fn encode(&mut self, sym: Symbol) -> Rank {
-        let mut next = self.symbols[0];
-        if next == sym {
-            return 0
-        }
-        let mut rank: Rank = 1u8;
-        loop {
-            mem::swap(&mut self.symbols[rank], &mut next);
-            if next == sym {
-                break;
-            }
-            rank += 1;
-            assert!((rank as uint) < self.symbols.len());
-        }
-        self.symbols[0] = sym;
-        rank
-    }
-
-    /// decode a rank into its symbol
-    pub fn decode(&mut self, rank: Rank) -> Symbol {
-        let sym = self.symbols[rank];
-        debug!("\tDecoding rank {} with symbol {}", rank, sym);
-        for i in iter::range_inclusive(1,rank).rev() {
-            self.symbols[i] = self.symbols[i-1];
-        }
-        self.symbols[0] = sym;
-        sym
-    }
-}
 
 
 /// encode a block of bytes 'input'
@@ -250,9 +195,9 @@ pub fn decode_simple<D: ToPrimitive>(N: uint, alphabet: &[Symbol], distances: &[
 #[cfg(test)]
 mod test {
     //use extra::test;
-    use super::{MTF, encode_simple, decode_simple};
+    use super::{encode_simple, decode_simple};
 
-    fn roundtrip_dc(bytes: &[u8]) {
+    fn roundtrip(bytes: &[u8]) {
         info!("Roundtrip DC of size {}", bytes.len());
         let (alphabet,distances) = encode_simple::<uint>(bytes);
         debug!("Roundtrip DC input: {:?}, alphabet: {:?}, distances: {:?}", bytes, alphabet, distances);
@@ -260,28 +205,10 @@ mod test {
         assert_eq!(decoded.as_slice(), bytes);
     }
 
-    fn roundtrip_mtf(bytes: &[u8]) {
-        info!("Roundtrip MTF of size {}", bytes.len());
-        let mut mtf = MTF::new();
-        mtf.reset_alphabetical();
-        let ranks = bytes.map(|&sym| mtf.encode(sym));
-        debug!("Roundtrip MTF input: {:?}, ranks: {:?}", bytes, ranks);
-        mtf.reset_alphabetical();
-        let decoded = ranks.map(|&r| mtf.decode(r));
-        assert_eq!(decoded.as_slice(), bytes);
-    }
-
     #[test]
-    fn some_roundtrips_dc() {
-        roundtrip_dc(bytes!("teeesst_dc"));
-        roundtrip_dc(bytes!(""));
-        roundtrip_dc(include_bin!("data/test.txt"));
-    }
-
-    #[test]
-    fn some_roundtrips_mtf() {
-        roundtrip_mtf(bytes!("teeesst_mtf"));
-        roundtrip_mtf(bytes!(""));
-        roundtrip_mtf(include_bin!("data/test.txt"));
+    fn some_roundtrips() {
+        roundtrip(bytes!("teeesst_dc"));
+        roundtrip(bytes!(""));
+        roundtrip(include_bin!("data/test.txt"));
     }
 }
