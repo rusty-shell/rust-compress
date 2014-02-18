@@ -49,19 +49,24 @@ This is an original (mostly trivial) implementation.
 
 use std::{io, iter, cmp, vec};
 
-pub static total_symbols: uint = 0x100;
+/// A base element for the transformation
+pub type Symbol = u8;
+/// An index to a substring
+pub type Suffix = uint;
+
+pub static ALPHABET_SIZE: uint = 0x100;
 
 /// Radix sorting primitive
 pub struct Radix    {
     /// number of occurancies (frequency) per symbox
-    freq    : [uint, ..total_symbols+1],
+    freq    : [uint, ..ALPHABET_SIZE+1],
 }
 
 impl Radix  {
     /// create Radix sort instance
     pub fn new() -> Radix   {
         Radix   {
-            freq : [0, ..total_symbols+1],
+            freq : [0, ..ALPHABET_SIZE+1],
         }
     }
 
@@ -74,7 +79,7 @@ impl Radix  {
     }
 
     /// count elements in the input
-    pub fn gather(&mut self, input: &[u8])  {
+    pub fn gather(&mut self, input: &[Symbol])  {
         for &b in input.iter()  {
             self.freq[b] += 1;
         }
@@ -91,7 +96,7 @@ impl Radix  {
     }
 
     /// return next byte position, advance it internally
-    pub fn place(&mut self, b: u8)-> uint   {
+    pub fn place(&mut self, b: Symbol)-> uint   {
         let pos = self.freq[b];
         assert!(self.freq[b] < self.freq[(b as uint)+1],
             "Unable to place symbol {} at offset {}",
@@ -103,8 +108,8 @@ impl Radix  {
     /// shift frequences to the left
     /// allows the offsets to be re-used after all positions are obtained
     pub fn shift(&mut self) {
-        assert_eq!( self.freq[total_symbols-1], self.freq[total_symbols] );
-        for i in iter::range_inclusive(1,total_symbols).rev()   {
+        assert_eq!( self.freq[ALPHABET_SIZE-1], self.freq[ALPHABET_SIZE] );
+        for i in iter::range_inclusive(1,ALPHABET_SIZE).rev()   {
             self.freq[i] = self.freq[i-1];
         }
         self.freq[0] = 0;
@@ -112,39 +117,33 @@ impl Radix  {
 }
 
 
-/// Stand-alone encoding/decoding methods, operating on single blocks.
-pub type Suffix = uint;
-
-/// Encode an input block and call 'fn_out' on each output byte, using 'suf' array temporarily.
-/// Returns the index of the original string in the output matrix.
-/// Run time: O(n^3), memory: 4n
-pub fn encode_brute(input: &[u8], suf: &mut [Suffix], fn_out: |u8|) -> Suffix {
-    assert_eq!(suf.len(), input.len());
-    if input.is_empty() { return 0 }
-
+/// Compute a suffix array from a given input string
+/// Resulting suffixes are guaranteed to be alphabetically sorted
+/// Run time: O(N^3), memory: N words (suf_array) + ALPHABET_SIZE words (Radix)
+pub fn compute_suffixes(input: &[Symbol], suf_array: &mut [Suffix]) {
     let mut radix = Radix::new();
     radix.gather(input);
     radix.accumulate();
 
-    debug!("encode input: {:?}", input);
+    debug!("SA compute input: {:?}", input);
     debug!("radix offsets: {:?}", radix.freq);
 
     for (i,&ch) in input.iter().enumerate() {
         let p = radix.place(ch);
-        suf[p] = i;
+        suf_array[p] = i;
     }
 
     // bring the original offsets back
     radix.shift();
 
-    for i in range(0,total_symbols)   {
+    for i in range(0, ALPHABET_SIZE)   {
         let lo = radix.freq[i];
         let hi = radix.freq[i+1];
         if lo == hi {
             continue
         }
-        let slice = suf.mut_slice(lo,hi);
-        debug!("sorting group [{}-{}) for symbol {}", lo, hi, i);
+        let slice = suf_array.mut_slice(lo,hi);
+        debug!("\tsorting group [{}-{}) for symbol {}", lo, hi, i);
         slice.sort_by(|&a,&b| {
             iter::order::cmp(
                 input.slice_from(a).iter(),
@@ -152,94 +151,151 @@ pub fn encode_brute(input: &[u8], suf: &mut [Suffix], fn_out: |u8|) -> Suffix {
         });
     }
 
-    debug!("encode suf: {:?}", suf);
+    debug!("sorted SA: {:?}", suf_array);
+}
 
-    // the alphabetically first suffix is always $
-    let mut origin = None::<Suffix>;
-    fn_out(*input.last().unwrap());
+/// An iterator over BWT output
+pub struct TransformIterator<'a> {
+    priv input      : &'a [Symbol],
+    priv suf_iter   : iter::Enumerate<vec::Items<'a,Suffix>>,
+    priv origin     : Option<uint>,
+}
 
-    for (i,&p) in suf.iter().enumerate() {
-        if p==0 {
-            assert!( origin.is_none() );
-            origin = Some(i+1); // yielding $
-        }else   {
-            fn_out(input[p-1]);
+impl<'a> TransformIterator<'a> {
+    /// create a new BWT iterator from the suffix array
+    pub fn new(input: &'a [Symbol], suffixes: &'a [Suffix]) -> TransformIterator<'a> {
+        TransformIterator {
+            input: input,
+            suf_iter: suffixes.iter().enumerate(),
+            origin: None,
         }
     }
 
-    origin.unwrap()
-}
-
-/// Encode an input block into the output slice, using 'suf' array temporarily.
-/// Returns the index of the original string in the output matrix.
-pub fn encode_mem(input: &[u8], suf: &mut [Suffix], output: &mut [u8]) -> Suffix {
-    let mut size = 0u;
-    let origin = encode_brute(input, suf, |ch| {output[size] = ch; size+=1;});
-    assert_eq!(size, input.len());
-    origin
-}
-
-/// Decode in a standard fashion, calling 'fn_out' on every output symbol,
-/// and using 'suf' array temporarily.
-/// Run time: O(n), memory: 4n
-pub fn decode_std(input: &[u8], origin: Suffix, suf: &mut [Suffix], fn_out: |u8|) {
-    assert_eq!(input.len(), suf.len())
-    if input.is_empty() {
-        assert_eq!(origin, 0);
-        return
+    /// return the index of the original string
+    pub fn get_origin(&self) -> uint {
+        self.origin.unwrap()
     }
+}
 
-    debug!("decode origin={}, input: {:?}", origin, input)
+impl<'a> Iterator<Symbol> for TransformIterator<'a> {
+    fn next(&mut self) -> Option<Symbol> {
+        self.suf_iter.next().map(|(i,&p)| {
+            if p == 0 {
+                assert!( self.origin.is_none() );
+                self.origin = Some(i);
+                *self.input.last().unwrap()
+            }else {
+                self.input[p-1]
+            }
+        })
+    }
+}
+
+/// Encode BWT of a given input, using the 'suf_array'
+pub fn encode<'a>(input: &'a [Symbol], suf_array: &'a mut [Suffix]) -> TransformIterator<'a> {
+    compute_suffixes(input, suf_array);
+    TransformIterator::new(input, suf_array)
+}
+
+/// Transform an input block into the output slice, all-inclusive version.
+/// Returns the index of the original string in the output matrix.
+pub fn encode_simple(input: &[Symbol]) -> (~[Symbol], Suffix) {
+    let mut suf_array = vec::from_elem(input.len(), 0 as Suffix);
+    let mut iter = encode(input, suf_array);
+    let output = iter.to_owned_vec();
+    (output, iter.get_origin())
+}
+
+
+/// Compute an inversion jump table, needed for BWT decoding
+pub fn compute_inversion_table(input: &[Symbol], origin: uint, table: &mut [Suffix]) {
+    assert_eq!(input.len(), table.len());
 
     let mut radix = Radix::new();
     radix.gather(input);
     radix.accumulate();
 
-    // the input stream virtually has $ inserted at origin
-    for (i,&ch) in input.iter().enumerate() {
-        let p = radix.place(ch);
-        suf[p] = if i<origin {i} else {i+1};
+    table[radix.place(input[origin])] = 0;
+    for (i,&ch) in input.slice_to(origin).iter().enumerate() {
+        table[radix.place(ch)] = (i+1) as Suffix;
     }
-    //suf[-1] = origin;
-
-    debug!("decode table: {:?}",suf)
-
-    let mut i = origin;
-    for _ in input.iter() {
-        assert!(i!=0, "Invalid BWT stream, origin={}", origin);
-        i = suf[i-1];
-        debug!("\tjumped to {}", i);
-        let p = if i>origin {i-1} else {i};
-        fn_out(input[p]);
+    for (i,&ch) in input.slice_from(origin+1).iter().enumerate() {
+        table[radix.place(ch)] = (origin+2+i) as Suffix;
     }
-    assert_eq!(i, 0);
+    //table[-1] = origin;
+    debug!("inverse table: {:?}", table)
 }
 
-/// Decode into output slice
-pub fn decode_mem(input: &[u8], origin: Suffix, suf: &mut [Suffix], output: &mut [u8]) {
-    let mut size = 0u;
-    decode_std(input, origin, suf, |ch| {output[size] = ch; size+=1;});
-    assert_eq!(size, input.len());
+/// An iterator over inverse BWT
+/// Run time: O(N), memory: N words (table)
+pub struct InverseIterator<'a> {
+    priv input      : &'a [Symbol],
+    priv table      : &'a [Suffix],
+    priv origin     : uint,
+    priv current    : Suffix,
+}
+
+impl<'a> InverseIterator<'a> {
+    /// create a new inverse BWT iterator with a given input, origin, and a jump table
+    pub fn new(input: &'a [Symbol], origin: uint, table: &'a [Suffix]) -> InverseIterator<'a> {
+        debug!("inverse origin={}, input: {:?}", origin, input);
+        InverseIterator {
+            input: input,
+            table: table,
+            origin: origin,
+            current: origin as Suffix,
+        }
+    }
+}
+
+impl<'a> Iterator<Symbol> for InverseIterator<'a> {
+    fn next(&mut self) -> Option<Symbol> {
+        if self.current == -1 {
+            None
+        }else {
+            self.current = self.table[self.current] - 1;
+            debug!("\tjumped to {}", self.current);
+            let p = if self.current!=-1 {
+                self.current
+            }else {
+                self.origin as Suffix
+            };
+            Some(self.input[p])
+        }
+    }
+}
+
+/// Decode a BWT block, given it's origin, and using 'table' temporarily
+pub fn decode<'a>(input: &'a [Symbol], origin: uint, table: &'a mut [Suffix]) -> InverseIterator<'a> {
+    compute_inversion_table(input, origin, table);
+    InverseIterator::new(input, origin, table)
+}
+
+/// A simplified BWT decode function, which allocates a temporary suffix array
+pub fn decode_simple(input: &[Symbol], origin: uint) -> ~[Symbol] {
+    let mut suf = vec::from_elem(input.len(), 0 as Suffix);
+    decode(input, origin, suf).take(input.len()).to_owned_vec()
 }
 
 /// Decode without additional memory, can be greatly optimized
 /// Run time: O(n^2), Memory: 0n
-fn decode_minimal(input: &[u8], origin: Suffix, output: &mut [u8]) {
+fn decode_minimal(input: &[Symbol], origin: Suffix, output: &mut [Symbol]) {
     assert_eq!(input.len(), output.len());
+    if input.len() == 0 {
+        assert_eq!(origin, 0);
+    }
 
     let mut radix = Radix::new();
     radix.gather(input);
     radix.accumulate();
 
     let n = input.len();
-    let mut i = 0;
-    for j in range(0,n) {
-        let ch = input[if i>origin {i-1} else {i}];
-        output[n-1-j] = ch;
-        i = (if i>origin {0} else {1}) + radix.freq[ch] +
-            input.slice_to(i).iter().count(|&k| k==ch);
-    }
-    assert_eq!(i, origin);
+    range(0,n).fold(origin, |i,j| {
+        let ch = input[i];
+        output[n-j-1] = ch;
+        let offset = input.slice_to(i).iter().count(|&k| k==ch);
+        radix.freq[ch] + offset
+    });
 }
 
 
@@ -312,13 +368,16 @@ impl<R: Reader> Decoder<R> {
 
         let origin = if_ok!(self.r.read_le_u32()) as uint;
         self.output.truncate(0);
-        self.output.grow_fn(n, |_| 0);  //Option: do not initialize
+        self.output.reserve(n);
 
         if self.extra_memory    {
             self.table.truncate(0);
             self.table.grow_fn(n, |_| 0);
-            decode_mem(self.temp, origin, self.table, self.output);
+            for ch in decode(self.temp, origin, self.table) {
+                self.output.push(ch);
+            }
         }else   {
+            self.output.grow_fn(n, |_| 0);
             decode_minimal(self.temp, origin, self.output);
         }
 
@@ -395,9 +454,14 @@ impl<W: Writer> Encoder<W> {
         self.suf.grow_fn(n, |_| n);
         let w = &mut self.w;
 
-        let origin = encode_brute(self.buf, self.suf, |ch| w.write_u8(ch).unwrap());
+        {
+            let mut iter = encode(self.buf, self.suf);
+            for ch in iter {
+                if_ok!(w.write_u8(ch));
+            }
 
-        if_ok!(w.write_le_u32(origin as u32));
+            if_ok!(w.write_le_u32(iter.get_origin() as u32));
+        }
         self.buf.truncate(0);
 
         Ok(())
@@ -447,25 +511,30 @@ mod test {
     use extra::test;
     use std::io::{BufReader, MemWriter};
     use std::vec;
-    use super::{encode_mem, decode_std, Suffix, Decoder, Encoder};
+    use super::{encode, decode, Suffix, Decoder, Encoder};
 
-    fn roundtrip(bytes: &[u8]) {
-        let mut e = Encoder::new( MemWriter::new(), 1<<10 );
+    fn roundtrip(bytes: &[u8], extra_mem: bool) {
+        let mut e = Encoder::new(MemWriter::new(), 1<<10);
         e.write(bytes).unwrap();
         let (e, err) = e.finish();
         err.unwrap();
         let encoded = e.unwrap();
 
-        let mut d = Decoder::new( BufReader::new(encoded), true );
+        let mut d = Decoder::new(BufReader::new(encoded), extra_mem);
         let decoded = d.read_to_end().unwrap();
         assert_eq!(decoded.as_slice(), bytes);
     }
 
     #[test]
     fn some_roundtrips() {
-        roundtrip(bytes!("test"));
-        roundtrip(bytes!(""));
-        roundtrip(include_bin!("data/test.txt"));
+        roundtrip(bytes!("test"), true);
+        roundtrip(bytes!(""), true);
+        roundtrip(include_bin!("data/test.txt"), true);
+    }
+
+    #[test]
+    fn decode_minimal() {
+        roundtrip(bytes!("abracadabra"), false);
     }
 
     #[bench]
@@ -473,10 +542,14 @@ mod test {
         let input = include_bin!("data/test.txt");
         let n = input.len();
         let mut suf = vec::from_elem(n, 0 as Suffix);
-        let mut output = vec::from_elem(n, 0u8);
-        let origin = encode_mem(input, suf, output);
+        let (output, origin) = {
+            let mut to_iter = encode(input, suf);
+            let out = to_iter.to_owned_vec();
+            (out, to_iter.get_origin())
+        };
         bh.iter(|| {
-            decode_std(output, origin, suf, |_| ());
+            let mut from_iter = decode(output, origin, suf);
+            assert_eq!(from_iter.last(), Some(input[origin]));
         });
         bh.bytes = n as u64;
     }
