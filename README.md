@@ -6,7 +6,9 @@ This repository aims to house various implementations of compression algorithms,
 all written in rust. This is still very much a work in progress.
 
 ```
-rustpkg install github.com/alexcrichton/rust-compress
+git clone https://github.com/alexcrichton/rust-compress
+cd rust-compress
+make
 ```
 
 ### Implemented Algorithms
