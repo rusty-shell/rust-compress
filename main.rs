@@ -15,7 +15,6 @@ extern crate compress;
 use std::hashmap::HashMap;
 use std::{io, os, str, vec};
 use compress::{bwt, lz4};
-use compress::post_bwt::mtf;
 //use compress::entropy::ari;
 
 
@@ -92,10 +91,10 @@ pub fn main() {
     });
     passes.insert(~"mtf", Pass {
         encode: |w,_c| {
-            ~mtf::Encoder::new(w) as ~Writer
+            ~bwt::mtf::Encoder::new(w) as ~Writer
         },
         decode: |r,_c| {
-            ~mtf::Decoder::new(r) as ~Reader
+            ~bwt::mtf::Decoder::new(r) as ~Reader
         },
         info: ~"Move-To-Front Transformation",
     });

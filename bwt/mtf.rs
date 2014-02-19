@@ -12,7 +12,7 @@ http://en.wikipedia.org/wiki/Move-to-front_transform
 
 ```rust
 use std::io;
-use compress::post_bwt::mtf;
+use compress::bwt::mtf;
 
 // Encode a stream of bytes
 let bytes = bytes!("abracadabra");

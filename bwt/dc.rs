@@ -10,7 +10,7 @@ http://www.data-compression.info/Algorithms/DC/
 # Example
 
 ```rust
-use compress::dc;
+use compress::bwt::dc;
 
 let bytes = bytes!("abracadabra");
 let (alphabet,distances) = dc::encode_simple::<uint>(bytes);
@@ -27,7 +27,7 @@ Thanks to Edgar Binder for inventing DC!
 */
 
 use std::{io, vec};
-use post_bwt::mtf::MTF;
+use super::mtf::MTF;
 
 pub type Symbol = u8;
 pub type Rank = u8;
@@ -209,6 +209,6 @@ mod test {
     fn some_roundtrips() {
         roundtrip(bytes!("teeesst_dc"));
         roundtrip(bytes!(""));
-        roundtrip(include_bin!("data/test.txt"));
+        roundtrip(include_bin!("../data/test.txt"));
     }
 }

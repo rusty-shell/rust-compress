@@ -49,6 +49,9 @@ This is an original (mostly trivial) implementation.
 
 use std::{cmp, io, iter, vec};
 
+pub mod dc;
+pub mod mtf;
+
 /// A base element for the transformation
 pub type Symbol = u8;
 
@@ -527,7 +530,7 @@ mod test {
     fn some_roundtrips() {
         roundtrip(bytes!("test"), true);
         roundtrip(bytes!(""), true);
-        roundtrip(include_bin!("data/test.txt"), true);
+        roundtrip(include_bin!("../data/test.txt"), true);
     }
 
     #[test]
@@ -537,7 +540,7 @@ mod test {
 
     #[bench]
     fn decode_speed(bh: &mut test::BenchHarness) {
-        let input = include_bin!("data/test.txt");
+        let input = include_bin!("../data/test.txt");
         let n = input.len();
         let mut suf = vec::from_elem(n, 0u16);
         let (output, origin) = {
