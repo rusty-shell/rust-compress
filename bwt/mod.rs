@@ -509,7 +509,7 @@ impl<W: Writer> Writer for Encoder<W> {
 
 #[cfg(test)]
 mod test {
-    use extra::test;
+    use test;
     use std::io::{BufReader, MemWriter};
     use std::vec;
     use super::{encode, decode, Decoder, Encoder};

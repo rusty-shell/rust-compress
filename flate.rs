@@ -469,7 +469,7 @@ impl<R: Reader> Reader for Decoder<R> {
 #[cfg(test)]
 #[allow(warnings)]
 mod test {
-    use extra::test;
+    use test;
     use std::rand;
     use std::io::{BufReader, MemWriter};
     use super::{Decoder};

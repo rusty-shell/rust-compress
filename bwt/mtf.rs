@@ -169,7 +169,7 @@ impl<R: Reader> Reader for Decoder<R> {
 
 #[cfg(test)]
 mod test {
-    use extra::test;
+    use test;
     use std::io;
     use super::{Encoder, Decoder};
 

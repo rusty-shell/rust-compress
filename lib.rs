@@ -6,7 +6,7 @@
 
 //! dox (placeholder)
 
-#[cfg(test)] extern crate extra;
+#[cfg(test)] extern crate test;
 
 mod adler32;
 

@@ -528,7 +528,7 @@ impl<R: Reader> Reader for ByteDecoder<R> {
 mod test {
     use std::io::{BufReader, BufWriter, MemWriter, SeekSet};
     use std::vec;
-    use extra::test;
+    use test;
     use super::{ByteEncoder, ByteDecoder};
 
     fn roundtrip(bytes: &[u8]) {
