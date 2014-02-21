@@ -89,6 +89,15 @@ pub fn main() {
         },
         info: ~"Burrows-Wheeler Transformation",
     });
+    passes.insert(~"mtf", Pass {
+        encode: |w,_c| {
+            ~bwt::mtf::Encoder::new(w) as ~Writer
+        },
+        decode: |r,_c| {
+            ~bwt::mtf::Decoder::new(r) as ~Reader
+        },
+        info: ~"Move-To-Front Transformation",
+    });
     /* // looks like we are missing the encoder implementation
     passes.insert(~"flate", Pass {
         encode: |w,_c| {

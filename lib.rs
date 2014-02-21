@@ -11,13 +11,12 @@
 mod adler32;
 
 pub mod bwt;
-pub mod dc;
 pub mod flate;
 pub mod lz4;
 pub mod zlib;
 
 /// Entropy coder family
-//http://en.wikipedia.org/wiki/Entropy_encoding
+// http://en.wikipedia.org/wiki/Entropy_encoding
 pub mod entropy {
 	pub mod ari;
 }
