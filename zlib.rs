@@ -49,8 +49,8 @@ impl<R: Reader> Decoder<R> {
     }
 
     fn validate_header(&mut self) -> io::IoResult<()> {
-        let cmf = if_ok!(self.inner.r.read_byte());
-        let flg = if_ok!(self.inner.r.read_byte());
+        let cmf = try!(self.inner.r.read_byte());
+        let flg = try!(self.inner.r.read_byte());
         if cmf & 0xf != 0x8 {
             return Err(io::IoError {
                 kind: io::InvalidInput,
@@ -98,7 +98,7 @@ impl<R: Reader> Decoder<R> {
 impl<R: Reader> Reader for Decoder<R> {
     fn read(&mut self, buf: &mut [u8]) -> io::IoResult<uint> {
         if !self.read_header {
-            if_ok!(self.validate_header());
+            try!(self.validate_header());
             self.read_header = true;
         } else if self.inner.eof() {
             return Err(io::standard_error(io::EndOfFile));
@@ -109,7 +109,7 @@ impl<R: Reader> Reader for Decoder<R> {
                 Ok(n)
             }
             Err(ref e) if e.kind == io::EndOfFile => {
-                let cksum = if_ok!(self.inner.r.read_be_u32());
+                let cksum = try!(self.inner.r.read_be_u32());
                 if cksum != self.hash.result() {
                     return Err(io::IoError {
                         kind: io::InvalidInput,

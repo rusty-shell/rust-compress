@@ -365,9 +365,9 @@ impl<R: Reader> Decoder<R> {
 
         self.temp.truncate(0);
         self.temp.reserve(n);
-        if_ok!(self.r.push_bytes(&mut self.temp, n));
+        try!(self.r.push_bytes(&mut self.temp, n));
 
-        let origin = if_ok!(self.r.read_le_u32()) as uint;
+        let origin = try!(self.r.read_le_u32()) as uint;
         self.output.truncate(0);
         self.output.reserve(n);
 
@@ -390,7 +390,7 @@ impl<R: Reader> Decoder<R> {
 impl<R: Reader> Reader for Decoder<R> {
     fn read(&mut self, dst: &mut [u8]) -> io::IoResult<uint> {
         if !self.header {
-            if_ok!(self.read_header());
+            try!(self.read_header());
             self.header = true;
         }
         let mut amt = dst.len();
@@ -398,7 +398,7 @@ impl<R: Reader> Reader for Decoder<R> {
 
         while amt > 0 {
             if self.output.len() == self.start {
-                let keep_going = if_ok!(self.decode_block());
+                let keep_going = try!(self.decode_block());
                 if !keep_going {
                    break
                 }
@@ -449,7 +449,7 @@ impl<W: Writer> Encoder<W> {
 
     fn encode_block(&mut self) -> io::IoResult<()> {
         let n = self.buf.len();
-        if_ok!(self.w.write_le_u32(n as u32));
+        try!(self.w.write_le_u32(n as u32));
 
         self.suf.truncate(0);
         self.suf.grow_fn(n, |_| n);
@@ -458,10 +458,10 @@ impl<W: Writer> Encoder<W> {
         {
             let mut iter = encode(self.buf, self.suf);
             for ch in iter {
-                if_ok!(w.write_u8(ch));
+                try!(w.write_u8(ch));
             }
 
-            if_ok!(w.write_le_u32(iter.get_origin() as u32));
+            try!(w.write_le_u32(iter.get_origin() as u32));
         }
         self.buf.truncate(0);
 
@@ -480,7 +480,7 @@ impl<W: Writer> Encoder<W> {
 impl<W: Writer> Writer for Encoder<W> {
     fn write(&mut self, mut buf: &[u8]) -> io::IoResult<()> {
         if !self.wrote_header {
-            if_ok!(self.w.write_le_u32(self.block_size as u32));
+            try!(self.w.write_le_u32(self.block_size as u32));
             self.wrote_header = true;
         }
 
@@ -489,7 +489,7 @@ impl<W: Writer> Writer for Encoder<W> {
             self.buf.push_all( buf.slice_to(amt) );
 
             if self.buf.len() == self.block_size {
-                if_ok!(self.encode_block());
+                try!(self.encode_block());
             }
             buf = buf.slice_from(amt);
         }

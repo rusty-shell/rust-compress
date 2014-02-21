@@ -114,7 +114,7 @@ impl<W: Writer> Writer for Encoder<W> {
     fn write(&mut self, buf: &[u8]) -> io::IoResult<()> {
         for sym in buf.iter() {
             let rank = self.mtf.encode(*sym);
-            if_ok!(self.w.write_u8(rank));
+            try!(self.w.write_u8(rank));
         }
         Ok(())
     }

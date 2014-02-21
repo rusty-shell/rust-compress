@@ -178,12 +178,12 @@ impl<R: Reader> Decoder<R> {
 
     fn read_header(&mut self) -> io::IoResult<()> {
         // Make sure the magic number is what's expected.
-        if if_ok!(self.r.read_le_u32()) != MAGIC {
+        if try!(self.r.read_le_u32()) != MAGIC {
             return Err(io::standard_error(io::InvalidInput))
         }
 
         let mut bits = [0, ..3];
-        if_ok!(self.r.read(bits.mut_slice_to(2)));
+        try!(self.r.read(bits.mut_slice_to(2)));
         let flg = bits[0];
         let bd = bits[1];
 
@@ -216,7 +216,7 @@ impl<R: Reader> Decoder<R> {
 
         // read off other portions of the stream
         let size = if stream_size {
-            Some(if_ok!(self.r.read_le_u64()))
+            Some(try!(self.r.read_le_u64()))
         } else {
             None
         };
@@ -230,13 +230,13 @@ impl<R: Reader> Decoder<R> {
         self.max_block_size = max_block_size;
 
         // XXX: implement checksums
-        let cksum = if_ok!(self.r.read_byte());
+        let cksum = try!(self.r.read_byte());
         debug!("ignoring header checksum: {:?}", cksum);
         return Ok(());
     }
 
     fn decode_block(&mut self) -> io::IoResult<bool> {
-        match if_ok!(self.r.read_le_u32()) {
+        match try!(self.r.read_le_u32()) {
             // final block, we're done here
             0 => return Ok(false),
 
@@ -245,7 +245,7 @@ impl<R: Reader> Decoder<R> {
                 let amt = (n & 0x7fffffff) as uint;
                 self.output.truncate(0);
                 self.output.reserve(amt);
-                if_ok!(self.r.push_bytes(&mut self.output, amt));
+                try!(self.r.push_bytes(&mut self.output, amt));
                 self.start = 0;
                 self.end = amt;
             }
@@ -255,7 +255,7 @@ impl<R: Reader> Decoder<R> {
                 let n = n as uint;
                 self.temp.truncate(0);
                 self.temp.reserve(n);
-                if_ok!(self.r.push_bytes(&mut self.temp, n));
+                try!(self.r.push_bytes(&mut self.temp, n));
 
                 let target = cmp::min(self.max_block_size, 4 * n / 3);
                 self.output.truncate(0);
@@ -273,7 +273,7 @@ impl<R: Reader> Decoder<R> {
         }
 
         if self.blk_checksum {
-            let cksum = if_ok!(self.r.read_le_u32());
+            let cksum = try!(self.r.read_le_u32());
             debug!("ignoring block checksum {:?}", cksum);
         }
         return Ok(true);
@@ -287,7 +287,7 @@ impl<R: Reader> Reader for Decoder<R> {
     fn read(&mut self, dst: &mut [u8]) -> io::IoResult<uint> {
         if self.eof { return Err(io::standard_error(io::EndOfFile)) }
         if !self.header {
-            if_ok!(self.read_header());
+            try!(self.read_header());
             self.header = true;
         }
         let mut amt = dst.len();
@@ -295,7 +295,7 @@ impl<R: Reader> Reader for Decoder<R> {
 
         while amt > 0 {
             if self.start == self.end {
-                let keep_going = if_ok!(self.decode_block());
+                let keep_going = try!(self.decode_block());
                 if !keep_going {
                     self.eof = true;
                     break;
@@ -343,11 +343,11 @@ impl<W: Writer> Encoder<W> {
     fn encode_block(&mut self) -> io::IoResult<()> {
         self.tmp.truncate(0);
         if self.compress() {
-            if_ok!(self.w.write_le_u32(self.tmp.len() as u32));
-            if_ok!(self.w.write(self.tmp))
+            try!(self.w.write_le_u32(self.tmp.len() as u32));
+            try!(self.w.write(self.tmp))
         } else {
-            if_ok!(self.w.write_le_u32((self.buf.len() as u32) | 0x80000000));
-            if_ok!(self.w.write(self.buf))
+            try!(self.w.write_le_u32((self.buf.len() as u32) | 0x80000000));
+            try!(self.w.write(self.buf))
         }
         self.buf.truncate(0);
         Ok(())
@@ -372,14 +372,14 @@ impl<W: Writer> Encoder<W> {
 impl<W: Writer> Writer for Encoder<W> {
     fn write(&mut self, mut buf: &[u8]) -> io::IoResult<()> {
         if !self.wrote_header {
-            if_ok!(self.w.write_le_u32(MAGIC));
+            try!(self.w.write_le_u32(MAGIC));
             // version 01, turn on block independence, but turn off
             // everything else (we have no checksums right now).
-            if_ok!(self.w.write_u8(0b01_100000));
+            try!(self.w.write_u8(0b01_100000));
             // Maximum block size is 256KB
-            if_ok!(self.w.write_u8(0b0_101_0000));
+            try!(self.w.write_u8(0b0_101_0000));
             // XXX: this checksum is just plain wrong.
-            if_ok!(self.w.write_u8(0));
+            try!(self.w.write_u8(0));
             self.wrote_header = true;
         }
 
@@ -388,7 +388,7 @@ impl<W: Writer> Writer for Encoder<W> {
             self.buf.push_all(buf.slice_to(amt));
 
             if self.buf.len() == self.limit {
-                if_ok!(self.encode_block());
+                try!(self.encode_block());
             }
             buf = buf.slice_from(amt);
         }
@@ -397,7 +397,7 @@ impl<W: Writer> Writer for Encoder<W> {
 
     fn flush(&mut self) -> io::IoResult<()> {
         if self.buf.len() > 0 {
-            if_ok!(self.encode_block());
+            try!(self.encode_block());
         }
         self.w.flush()
     }

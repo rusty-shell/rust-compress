@@ -503,14 +503,14 @@ impl<R: Reader> ByteDecoder<R> {
 impl<R: Reader> Reader for ByteDecoder<R> {
     fn read(&mut self, dst: &mut [u8]) -> io::IoResult<uint> {
         if self.decoder.tell() == 0 {
-            if_ok!(self.decoder.start());
+            try!(self.decoder.start());
         }
         if self.is_eof {
             return Err(io::standard_error(io::EndOfFile))
         }
         let mut amount = 0u;
         for out_byte in dst.mut_iter() {
-            let value = if_ok!(self.decoder.decode(&self.freq));
+            let value = try!(self.decoder.decode(&self.freq));
             if value == symbol_total {
                 self.is_eof = true;
                 break
