@@ -10,9 +10,9 @@
 //! echo "banana" | ./app bwt | ./app -d
 
 extern crate compress;
+extern crate collections;
 
-
-use std::hashmap::HashMap;
+use collections::HashMap;
 use std::{io, os, str, vec};
 use compress::{bwt, lz4};
 //use compress::entropy::ari;
