@@ -139,6 +139,8 @@ pub fn decode(alphabet: Option<&[Symbol]>, output: &mut [Symbol], mtf: &mut MTF,
                 mtf.symbols[i] = i as Symbol;
                 debug!("\tRegistering symbol {} at position {}", i, next[i]);
             }
+            // sort ranks by first occurrence
+            mtf.symbols.mut_slice_to(TotalSymbols).sort_by(|&a,&b| next[a].cmp(&next[b]));
             TotalSymbols
         },
     };
@@ -156,12 +158,13 @@ pub fn decode(alphabet: Option<&[Symbol]>, output: &mut [Symbol], mtf: &mut MTF,
             Err(e) => return Err(e)
         };
         debug!("\t\tLooking for future position {}", future);
+        assert!(future <= N);
         let mut rank = 1u;
         while rank < E && future+rank > next[mtf.symbols[rank]] {
             mtf.symbols[rank-1] = mtf.symbols[rank];
             rank += 1;
         }
-        if rank<E {
+        if rank < E {
             debug!("\t\tFound sym {} of rank {} at position {}", mtf.symbols[rank],
                 rank, next[mtf.symbols[rank]]);
         }else {
@@ -194,21 +197,49 @@ pub fn decode_simple<D: ToPrimitive>(N: uint, alphabet: &[Symbol], distances: &[
 
 #[cfg(test)]
 mod test {
-    //use extra::test;
-    use super::{encode_simple, decode_simple};
+    use std;
 
     fn roundtrip(bytes: &[u8]) {
         info!("Roundtrip DC of size {}", bytes.len());
-        let (alphabet,distances) = encode_simple::<uint>(bytes);
+        let (alphabet,distances) = super::encode_simple::<uint>(bytes);
         debug!("Roundtrip DC input: {:?}, alphabet: {:?}, distances: {:?}", bytes, alphabet, distances);
-        let decoded = decode_simple(bytes.len(), alphabet.as_slice(), distances.as_slice());
+        let decoded = super::decode_simple(bytes.len(), alphabet.as_slice(), distances.as_slice());
+        assert_eq!(decoded.as_slice(), bytes);
+    }
+
+    fn roundtrip_full_alphabet(bytes: &[u8]) {
+        let N = bytes.len();
+        info!("Roundtrip DC (full alphabet) of size {}", N);
+        let mut mtf = super::MTF::new();
+        // encoding with full alphabet
+        let mut raw_dist = std::vec::from_elem(N, 0u);
+        let pairs = super::encode(bytes, raw_dist, &mut mtf);
+        let mut alphabet = std::vec::from_elem(0x100, N);
+        for &(sym,dist) in pairs.iter() {
+            alphabet[sym] = dist;
+        }
+        let raw_iter = raw_dist.iter().filter(|&d| *d!=N);
+        let distances = alphabet.iter().chain(raw_iter).to_owned_vec();
+        // decoding with full alphabet
+        let mut decoded = std::vec::from_elem(N, 0 as super::Symbol);
+        let mut di = 0u;
+        super::decode(None, decoded.as_mut_slice(), &mut mtf, |_sym| {
+            di += 1;
+            Ok(distances[di-1].to_uint().unwrap())
+        }).unwrap();
+        // comparing with input
         assert_eq!(decoded.as_slice(), bytes);
     }
 
     #[test]
-    fn some_roundtrips() {
+    fn roundtrips_short() {
         roundtrip(bytes!("teeesst_dc"));
         roundtrip(bytes!(""));
         roundtrip(include_bin!("../data/test.txt"));
+    }
+
+    #[test]
+    fn roundtrips_long() {
+        roundtrip_full_alphabet(std::iter::range_inclusive(0u8, 0xFFu8).to_owned_vec());
     }
 }
