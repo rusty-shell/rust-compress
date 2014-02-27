@@ -138,13 +138,11 @@ pub static range_default_threshold: Border = 1<<14;
 
 /// Encode 'value', using a model and a range encoder
 /// returns a list of output bytes
-pub fn encode<M: Model>(value: Value, model: &M, re: &mut RangeEncoder) -> ~[Symbol] {
+pub fn encode<M: Model>(value: Value, model: &M, re: &mut RangeEncoder, accum: &mut ~[Symbol]) {
     let (lo, hi) = model.get_range(value);
-    let mut accum: ~[Symbol] = ~[];
     let total = model.get_denominator();
     debug!("\tEncoding value {} of range [{}-{}) with total {}", value, lo, hi, total);
     re.process(total, lo, hi, |s| accum.push(s));
-    accum
 }
 
 /// Decode a value using given 'code' on the range encoder
@@ -164,6 +162,7 @@ pub fn decode<M: Model>(code: Border, model: &M, re: &mut RangeEncoder) -> (Valu
 pub struct Encoder<W> {
     priv stream: W,
     priv range: RangeEncoder,
+    priv buffer: ~[Symbol],
     priv bytes_written: uint,
 }
 
@@ -173,15 +172,17 @@ impl<W: Writer> Encoder<W> {
         Encoder {
             stream: w,
             range: RangeEncoder::new(range_default_threshold),
+            buffer: vec::with_capacity(4),
             bytes_written: 0,
         }
     }
 
     /// Encode an abstract value under the given 'model'
     pub fn encode<M: Model>(&mut self, value: Value, model: &M) -> io::IoResult<()> {
-        let bytes = encode(value, model, &mut self.range);
-        self.bytes_written += bytes.len();
-        self.stream.write(bytes)
+        self.buffer.truncate(0);
+        encode(value, model, &mut self.range, &mut self.buffer);
+        self.bytes_written += self.buffer.len();
+        self.stream.write(self.buffer)
     }
 
     /// Finish decoding by writing the code tail word
