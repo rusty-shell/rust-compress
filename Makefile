@@ -31,9 +31,12 @@ check: test doctest
 test: $(LIBTEST)
 	$(LIBTEST)
 
+bench: $(LIBTEST)
+	$(LIBTEST) --bench
+
 $(LIBTEST): lib.rs
 	@mkdir -p $(@D)
-	$(RUSTC) --test --out-dir $(@D) lib.rs --dep-info
+	$(RUSTC) $(RUSTFLAGS) --test --out-dir $(@D) lib.rs --dep-info
 
 doctest: $(COMPRESS)
 	$(RUSTDOC) --test lib.rs -L build
