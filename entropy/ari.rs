@@ -234,6 +234,7 @@ impl<R: Reader> Decoder<R> {
 
     /// Decode an abstract value based on the given model
     pub fn decode<M: Model>(&mut self, model: &M) -> io::IoResult<Value> {
+        assert!(self.bytes_read > 0);
         let (value,shift) = decode(self.code, model, &mut self.range);
         self.bytes_read += shift;
         for b in self.stream.bytes().take(shift) {
@@ -258,54 +259,65 @@ impl<R: Reader> Decoder<R> {
 pub struct BinaryModel {
     /// frequency of bit 0
     priv zero: Border,
-    /// total frequency
+    /// total frequency (constant)
     priv total: Border,
-    /// maximum allowed sum of frequency,
-    /// should be smaller than RangeEncoder::threshold
-    priv cut_threshold: Border,
-    /// number of bits to shift on cut
-    priv cut_shift: uint,
 }
 
 impl BinaryModel {
     /// Create a new flat (50/50 probability) instance
     pub fn new_flat(threshold: Border) -> BinaryModel {
-        assert!(threshold > 2);
+        assert!(threshold >= 2);
         BinaryModel {
-            zero: 1,
-            total: 2,
-            cut_threshold: threshold,
-            cut_shift: 2
+            zero: threshold>>1,
+            total: threshold,
         }
     }
+    
     /// Create a new instance with a given percentage for zeroes
     pub fn new_custom(zero_percent: u8, threshold: Border) -> BinaryModel {
-        assert!(threshold > 100);
+        assert!(threshold >= 100);
         BinaryModel {
-            zero: zero_percent as Border,
-            total: 100,
-            cut_threshold: threshold,
-            cut_shift: 2,
+            zero: (zero_percent as Border)*threshold/100,
+            total: threshold,
         }
     }
+
+    /// Reset the model to 50/50 distribution
+    pub fn reset_flat(&mut self) {
+        self.zero = self.total>>1;
+    }
+
+    /// Return the probability of 0
+    pub fn get_probability_zero(&self) -> Border {
+        self.zero
+    }
+
+    /// Return the probability of 1
+    pub fn get_probability_one(&self) -> Border {
+        self.total - self.zero
+    }
+
+    /// Update the frequency of zero
+    pub fn update_zero(&mut self, factor: uint) {
+        debug!("\tUpdating zero by a factor of {}", factor);
+        self.zero += (self.total-self.zero) >> factor;
+    }
+
+    /// Update the frequency of one
+    pub fn update_one(&mut self, factor: uint) {
+        debug!("\tUpdating one by a factor of {}", factor);
+        self.zero -= self.zero >> factor;
+    }
+
     /// Update frequencies in favor of given 'value'
-    pub fn update(&mut self, value: Value, add_log: uint, add_const: Border) {
+    /// Lower factors produce more aggressive updates
+    pub fn update(&mut self, value: Value, factor: uint) {
         assert!(value < 2);
-        let add = (self.total>>add_log) + add_const;
-        debug!("\tUpdating by adding {} to value {}", add, value);
-        self.total += add;
-        if value==0 {
-            self.zero += add;
+        if value==1 {
+            self.update_one(factor)
+        }else {
+            self.update_zero(factor)
         }
-        if self.total >= self.cut_threshold {
-            self.downscale();
-        }
-    }
-    /// Reduce frequencies by 'cut_iter' bits
-    pub fn downscale(&mut self) {
-        let roundup = (1<<self.cut_shift) - 1;
-        self.zero = (self.zero + roundup) >> self.cut_shift;
-        self.total = (self.total + roundup) >> self.cut_shift;
     }
 }
 
@@ -331,6 +343,51 @@ impl Model for BinaryModel {
 
     fn get_denominator(&self) -> Border {
         self.total
+    }
+}
+
+
+/// A proxy model for the sum of two binary models
+pub struct BinarySumProxy<'a> {
+    priv first: &'a BinaryModel,
+    priv second: &'a BinaryModel,
+}
+
+impl<'a> BinarySumProxy<'a> {
+    /// Create a new instance of the binary sum proxy
+    pub fn new(a: &'a BinaryModel, b: &'a BinaryModel) -> BinarySumProxy<'a> {
+        BinarySumProxy {
+            first: a,
+            second: b,
+        }
+    }
+}
+
+impl<'a> Model for BinarySumProxy<'a> {
+    fn get_range(&self, value: Value) -> (Border,Border) {
+        let zero = self.first.get_probability_zero() + self.second.get_probability_zero();
+        if value==0 {
+            (0, zero)
+        }else {
+            (zero, self.get_denominator())
+        }
+    }
+
+    fn find_value(&self, offset: Border) -> (Value,Border,Border) {
+        let zero = self.first.get_probability_zero() + self.second.get_probability_zero();
+        let total = self.get_denominator();
+        assert!(offset < total,
+            "Invalid frequency offset {} requested under total {}",
+            offset, total);
+        if offset < zero {
+            (0, 0, zero)
+        }else {
+            (1, zero, total)
+        }
+    }
+
+    fn get_denominator(&self) -> Border {
+        self.first.get_denominator() + self.second.get_denominator()
     }
 }
 
@@ -407,6 +464,11 @@ impl FrequencyTable {
             self.total += *freq as Border;
         }
     }
+
+    /// Return read-only frequencies slice
+    pub fn get_frequencies<'a>(&'a self) -> &'a [Frequency] {
+        self.table.as_slice()
+    }
 }
 
 impl Model for FrequencyTable {
@@ -431,6 +493,53 @@ impl Model for FrequencyTable {
 
     fn get_denominator(&self) -> Border {
         self.total
+    }
+}
+
+
+/// A proxy model for the sum of two frequency tables
+pub struct TableSumProxy<'a> {
+    priv first: &'a FrequencyTable,
+    priv second: &'a FrequencyTable,
+}
+
+impl<'a> TableSumProxy<'a> {
+    /// Create a new instance of the table sum proxy
+    pub fn new(fa: &'a FrequencyTable, fb: &'a FrequencyTable) -> TableSumProxy<'a> {
+        assert_eq!(fa.get_frequencies().len(), fb.get_frequencies().len());
+        TableSumProxy {
+            first: fa,
+            second: fb,
+        }
+    }
+}
+
+impl<'a> Model for TableSumProxy<'a> {
+    fn get_range(&self, value: Value) -> (Border,Border) {
+        let (lo0, hi0) = self.first.get_range(value);
+        let (lo1, hi1) = self.second.get_range(value);
+        (lo0+lo1, hi0+hi1)
+    }
+
+    fn find_value(&self, offset: Border) -> (Value,Border,Border) {
+        assert!(offset < self.get_denominator(),
+            "Invalid frequency offset {} requested under total {}",
+            offset, self.get_denominator());
+        let mut value = 0u;
+        let mut lo = 0 as Border;
+        let mut hi;
+        while {  hi = lo +
+                (self.first.get_frequencies()[value] as Border) +
+                (self.second.get_frequencies()[value] as Border);
+                hi <= offset } {
+            lo = hi;
+            value += 1;
+        }
+        (value, lo, hi)
+    }
+
+    fn get_denominator(&self) -> Border {
+        self.first.get_denominator() + self.second.get_denominator()
     }
 }
 
@@ -530,26 +639,62 @@ mod test {
     use std::io::{BufReader, BufWriter, MemWriter, SeekSet};
     use std::vec;
     use test;
-    use super::{ByteEncoder, ByteDecoder};
 
     fn roundtrip(bytes: &[u8]) {
         info!("Roundtrip Ari of size {}", bytes.len());
-        let mut e = ByteEncoder::new(MemWriter::new());
+        let mut e = super::ByteEncoder::new(MemWriter::new());
         e.write(bytes).unwrap();
         let (e, r) = e.finish();
         r.unwrap();
         let encoded = e.unwrap();
         debug!("Roundtrip input {:?} encoded {:?}", bytes, encoded);
-        let mut d = ByteDecoder::new(BufReader::new(encoded));
+        let mut d = super::ByteDecoder::new(BufReader::new(encoded));
         let decoded = d.read_to_end().unwrap();
         assert_eq!(bytes.as_slice(), decoded.as_slice());
     }
 
+    fn encode_binary(bytes: &[u8], model: &mut super::BinaryModel, factor: uint) -> ~[u8] {
+        let mut encoder = super::Encoder::new(MemWriter::new());
+        for &byte in bytes.iter() {
+            for i in range(0,8) {
+                let bit = ((byte as uint)>>i) & 1;
+                encoder.encode(bit, model).unwrap();
+                model.update(bit, factor);
+            }
+        }
+        let (writer, err) = encoder.finish();
+        err.unwrap();
+        writer.unwrap()
+    }
+
+    fn roundtrip_binary(bytes: &[u8], factor: uint) {
+        let mut bm = super::BinaryModel::new_flat(super::range_default_threshold >> 3);
+        let output = encode_binary(bytes, &mut bm, factor);
+        bm.reset_flat();
+        let mut decoder = super::Decoder::new(BufReader::new(output));
+        decoder.start().unwrap();
+        for &byte in bytes.iter() {
+            let mut value = 0u8;
+            for i in range(0,8) {
+                let bit = decoder.decode(&bm).unwrap();
+                bm.update(bit, factor);
+                value += (bit as u8)<<i;
+            }
+            assert_eq!(value, byte);
+        }
+    }
+
     #[test]
-    fn some_roundtrips() {
+    fn roundtrips() {
         roundtrip(bytes!("abracadabra"));
         roundtrip(bytes!(""));
         roundtrip(include_bin!("../data/test.txt"));
+    }
+
+    #[test]
+    fn roundtrips_binary() {
+        roundtrip_binary(bytes!("abracadabra"), 1);
+        roundtrip_binary(include_bin!("../data/test.txt"), 5);
     }
 
     #[bench]
@@ -559,7 +704,7 @@ mod test {
         bh.iter(|| {
             let mut w = BufWriter::new(storage);
             w.seek(0, SeekSet).unwrap();
-            let mut e = ByteEncoder::new(w);
+            let mut e = super::ByteEncoder::new(w);
             e.write(input).unwrap();
         });
         bh.bytes = input.len() as u64;
