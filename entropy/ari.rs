@@ -272,7 +272,7 @@ impl BinaryModel {
             total: threshold,
         }
     }
-    
+
     /// Create a new instance with a given percentage for zeroes
     pub fn new_custom(zero_percent: u8, threshold: Border) -> BinaryModel {
         assert!(threshold >= 100);
@@ -657,7 +657,7 @@ mod test {
         let mut encoder = super::Encoder::new(MemWriter::new());
         for &byte in bytes.iter() {
             for i in range(0,8) {
-                let bit = ((byte as uint)>>i) & 1;
+                let bit = ((byte as super::Value)>>i) & 1;
                 encoder.encode(bit, model).unwrap();
                 model.update(bit, factor);
             }
@@ -684,6 +684,68 @@ mod test {
         }
     }
 
+    fn roundtrip_proxy(bytes: &[u8]) {
+        // prepare data
+        let factor0 = 3;
+        let factor1 = 5;
+        let update0 = 10;
+        let update1 = 5;
+        let threshold = super::range_default_threshold >> 3;
+        let mut t0 = super::FrequencyTable::new_flat(16, threshold);
+        let mut t1 = super::FrequencyTable::new_flat(16, threshold);
+        let mut b0 = super::BinaryModel::new_flat(threshold);
+        let mut b1 = super::BinaryModel::new_flat(threshold);
+        // encode (high 4 bits with the proxy table, low 4 bits with the proxy binary)
+        let mut encoder = super::Encoder::new(MemWriter::new());
+        for &byte in bytes.iter() {
+            let high = (byte>>4) as super::Value;
+            {
+                let proxy = super::TableSumProxy::new(&t0, &t1);
+                encoder.encode(high, &proxy).unwrap();
+            }
+            t0.update(high, update0, 1);
+            t1.update(high, update1, 1);
+            for i in range(0,4) {
+                let bit = ((byte as super::Value)>>i) & 1;
+                {
+                    let proxy = super::BinarySumProxy::new(&b0, &b1);
+                    encoder.encode(bit, &proxy).unwrap();
+                }
+                b0.update(bit, factor0);
+                b1.update(bit, factor1);
+            }
+        }
+        let (writer, err) = encoder.finish();
+        err.unwrap();
+        let buffer = writer.unwrap();
+        // decode
+        t0.reset_flat();
+        t1.reset_flat();
+        b0.reset_flat();
+        b1.reset_flat();
+        let mut decoder = super::Decoder::new(BufReader::new(buffer));
+        decoder.start().unwrap();
+        for &byte in bytes.iter() {
+            let high = {
+                let proxy = super::TableSumProxy::new(&t0, &t1);
+                decoder.decode(&proxy).unwrap()
+            };
+            t0.update(high, update0, 1);
+            t1.update(high, update1, 1);
+            let mut value = (high<<4) as u8;
+            for i in range(0,4) {
+                let bit = {
+                    let proxy = super::BinarySumProxy::new(&b0, &b1);
+                    decoder.decode(&proxy).unwrap()
+                };
+                value += (bit as u8)<<i;
+                b0.update(bit, factor0);
+                b1.update(bit, factor1);
+            }
+            assert_eq!(value, byte);
+        }
+    }
+
     #[test]
     fn roundtrips() {
         roundtrip(bytes!("abracadabra"));
@@ -695,6 +757,12 @@ mod test {
     fn roundtrips_binary() {
         roundtrip_binary(bytes!("abracadabra"), 1);
         roundtrip_binary(include_bin!("../data/test.txt"), 5);
+    }
+
+    #[test]
+    fn roundtrips_proxy() {
+        roundtrip_proxy(bytes!("abracadabra"));
+        roundtrip_proxy(include_bin!("../data/test.txt"));
     }
 
     #[bench]
