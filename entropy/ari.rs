@@ -33,6 +33,8 @@ This is an original implementation.
 */
 
 use std::{io, vec};
+#[cfg(tune)]
+use std::num;
 
 pub type Symbol = u8;
 static symbol_bits: uint = 8;
@@ -53,6 +55,9 @@ pub struct RangeEncoder {
     /// has to be at least the largest incoming 'total',
     /// and optimally many times larger
     threshold: Border,
+    // tune parameters
+    priv bits_lost_on_threshold_cut: f32,
+    priv bits_lost_on_division: f32,
 }
 
 impl RangeEncoder {
@@ -61,13 +66,35 @@ impl RangeEncoder {
     /// A typical value is 16k
     pub fn new(max_range: Border) -> RangeEncoder {
         assert!(max_range > (symbol_total as Border));
-        RangeEncoder { low:0, hai:-1, threshold: max_range }
+        RangeEncoder {
+            low: 0,
+            hai: -1,
+            threshold: max_range,
+            bits_lost_on_threshold_cut: 0.0,
+            bits_lost_on_division: 0.0,
+        }
     }
 
     /// Reset the current range
     pub fn reset(&mut self) {
         self.low = 0;
         self.hai = -1;
+    }
+
+    #[cfg(tune)]
+    fn count_bits(range: Border, total: Border) -> f32 {
+        -num::log2((range as f32) / (total as f32))
+    }
+
+    #[cfg(not(tune))]
+    fn count_bits(_range: Border, _total: Border) -> f32 {
+        0.0
+    }
+
+    /// return the number of bits lost due to threshold cuts and integer operations
+    #[cfg(tune)]
+    pub fn get_bits_lost(&self) -> (f32, f32) {
+        (self.bits_lost_on_threshold_cut, self.bits_lost_on_division)
     }
 
     /// Process a given interval [from/total,to/total) into the current range
@@ -80,12 +107,15 @@ impl RangeEncoder {
         assert!(from < to);
         let mut lo = self.low + range*from;
         let mut hi = self.low + range*to;
+        self.bits_lost_on_division += RangeEncoder::count_bits(range*total, self.hai-self.low);
         while hi < lo+self.threshold {
             if ((lo^hi) & border_symbol_mask) != 0 {
                 let lim = hi & border_symbol_mask;
+                let old_range = hi-lo;
                 if hi-lim >= lim-lo {lo=lim}
                 else {hi=lim-1};
                 assert!(lo < hi);
+                self.bits_lost_on_threshold_cut += RangeEncoder::count_bits(hi-lo, old_range);
             }
             while ((lo^hi) & border_symbol_mask) == 0 {
                 debug!("\t\tShifting on [{}-{}) to symbol {}", lo, hi, lo>>border_excess);
@@ -203,6 +233,13 @@ impl<W: Writer> Encoder<W> {
     /// Tell the number of bytes written so far
     pub fn tell(&self) -> uint {
         self.bytes_written
+    }
+
+    /// return the number of bytes lost due to threshold cuts and integer operations
+    #[cfg(tune)]
+    pub fn get_bytes_lost(&self) -> (f32, f32) {
+        let (a,b) = self.range.get_bits_lost();
+        (a/8.0, b/8.0)
     }
 }
 
