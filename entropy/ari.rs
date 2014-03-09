@@ -108,21 +108,23 @@ impl RangeEncoder {
         let mut lo = self.low + range*from;
         let mut hi = self.low + range*to;
         self.bits_lost_on_division += RangeEncoder::count_bits(range*total, self.hai-self.low);
-        while hi < lo+self.threshold {
-            if ((lo^hi) & border_symbol_mask) != 0 {
-                let lim = hi & border_symbol_mask;
+        loop {
+            if (lo^hi) & border_symbol_mask != 0 {
+                if hi-lo > self.threshold {
+                    break
+                }
                 let old_range = hi-lo;
+                let lim = hi & border_symbol_mask;
                 if hi-lim >= lim-lo {lo=lim}
                 else {hi=lim-1};
                 assert!(lo < hi);
                 self.bits_lost_on_threshold_cut += RangeEncoder::count_bits(hi-lo, old_range);
             }
-            while ((lo^hi) & border_symbol_mask) == 0 {
-                debug!("\t\tShifting on [{}-{}) to symbol {}", lo, hi, lo>>border_excess);
-                fn_shift((lo>>border_excess) as Symbol);
-                lo<<=symbol_bits; hi<<=symbol_bits;
-                assert!(lo < hi);
-            }
+
+            debug!("\t\tShifting on [{}-{}) to symbol {}", lo, hi, lo>>border_excess);
+            fn_shift((lo>>border_excess) as Symbol);
+            lo<<=symbol_bits; hi<<=symbol_bits;
+            assert!(lo < hi);
         }
         self.low = lo;
         self.hai = hi;
@@ -135,7 +137,6 @@ impl RangeEncoder {
         assert!(self.low <= code && code < self.hai)
         let range = (self.hai - self.low) / total;
         (code - self.low) / range
-        //TODO: use better mul-div logic, when LLVM allows
     }
 
     /// Get the code tail and close the range
