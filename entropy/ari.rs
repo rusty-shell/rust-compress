@@ -385,30 +385,32 @@ impl Model for BinaryModel {
 }
 
 
-/// A proxy model for the sum of two binary models
+/// A proxy model for the combination of two binary models
+/// using equation: (wa * A + wb * B) >> ws
 pub struct BinarySumProxy<'a> {
     priv first: &'a BinaryModel,
     priv second: &'a BinaryModel,
     priv w_first: Border,
     priv w_second: Border,
+    priv w_shift: Border,
 }
 
 impl<'a> BinarySumProxy<'a> {
     /// Create a new instance of the binary sum proxy
-    pub fn new(first: (Border, &'a BinaryModel), second: (Border, &'a BinaryModel)) -> BinarySumProxy<'a> {
-        let (wa, fa) = first;
-        let (wb, fb) = second;
+    pub fn new(wa: Border, first: &'a BinaryModel, wb: Border, second: &'a BinaryModel, shift: Border) -> BinarySumProxy<'a> {
         BinarySumProxy {
-            first: fa,
-            second: fb,
+            first: first,
+            second: second,
             w_first: wa,
             w_second: wb,
+            w_shift: shift,
         }
     }
 
     fn get_probability_zero(&self) -> Border {
-        self.w_first * self.first.get_probability_zero() +
-            self.w_second * self.second.get_probability_zero()
+        (self.w_first * self.first.get_probability_zero() +
+            self.w_second * self.second.get_probability_zero()) >>
+            self.w_shift
     }
 }
 
@@ -436,8 +438,9 @@ impl<'a> Model for BinarySumProxy<'a> {
     }
 
     fn get_denominator(&self) -> Border {
-        self.w_first * self.first.get_denominator() +
-            self.w_second * self.second.get_denominator()
+        (self.w_first * self.first.get_denominator() +
+            self.w_second * self.second.get_denominator()) >>
+            self.w_shift
     }
 }
 
@@ -548,24 +551,25 @@ impl Model for FrequencyTable {
 
 
 /// A proxy model for the sum of two frequency tables
+/// using equation: (wa * A + wb * B) >> ws
 pub struct TableSumProxy<'a> {
     priv first: &'a FrequencyTable,
     priv second: &'a FrequencyTable,
     priv w_first: Border,
     priv w_second: Border,
+    priv w_shift: Border,
 }
 
 impl<'a> TableSumProxy<'a> {
     /// Create a new instance of the table sum proxy
-    pub fn new(first: (Border, &'a FrequencyTable), second: (Border, &'a FrequencyTable)) -> TableSumProxy<'a> {
-        let (wa, fa) = first;
-        let (wb, fb) = second;
+    pub fn new(wa: Border, fa: &'a FrequencyTable, wb: Border, fb: &'a FrequencyTable, shift: Border) -> TableSumProxy<'a> {
         assert_eq!(fa.get_frequencies().len(), fb.get_frequencies().len());
         TableSumProxy {
             first: fa,
             second: fb,
             w_first: wa,
             w_second: wb,
+            w_shift: shift,
         }
     }
 }
@@ -574,8 +578,8 @@ impl<'a> Model for TableSumProxy<'a> {
     fn get_range(&self, value: Value) -> (Border,Border) {
         let (lo0, hi0) = self.first.get_range(value);
         let (lo1, hi1) = self.second.get_range(value);
-        let (wa, wb) = (self.w_first, self.w_second);
-        (wa*lo0 + wb*lo1, wa*hi0 + wb*hi1)
+        let (wa, wb, ws) = (self.w_first, self.w_second, self.w_shift);
+        ((wa*lo0 + wb*lo1)>>ws, (wa*hi0 + wb*hi1)>>ws)
     }
 
     fn find_value(&self, offset: Border) -> (Value,Border,Border) {
@@ -586,8 +590,9 @@ impl<'a> Model for TableSumProxy<'a> {
         let mut lo = 0 as Border;
         let mut hi;
         while {  hi = lo +
-                self.w_first * (self.first.get_frequencies()[value] as Border) +
-                self.w_second * (self.second.get_frequencies()[value] as Border);
+                (self.w_first * (self.first.get_frequencies()[value] as Border) +
+                self.w_second * (self.second.get_frequencies()[value] as Border)) >>
+                self.w_shift;
                 hi <= offset } {
             lo = hi;
             value += 1;
@@ -596,8 +601,9 @@ impl<'a> Model for TableSumProxy<'a> {
     }
 
     fn get_denominator(&self) -> Border {
-        self.w_first * self.first.get_denominator() +
-            self.w_second * self.second.get_denominator()
+        (self.w_first * self.first.get_denominator() +
+            self.w_second * self.second.get_denominator()) >>
+            self.w_shift
     }
 }
 
@@ -758,7 +764,7 @@ mod test {
         for &byte in bytes.iter() {
             let high = (byte>>4) as super::Value;
             {
-                let proxy = super::TableSumProxy::new((2,&t0), (1,&t1));
+                let proxy = super::TableSumProxy::new(2, &t0, 1, &t1, 0);
                 encoder.encode(high, &proxy).unwrap();
             }
             t0.update(high, update0, 1);
@@ -766,7 +772,7 @@ mod test {
             for i in range(0,4) {
                 let bit = ((byte as super::Value)>>i) & 1;
                 {
-                    let proxy = super::BinarySumProxy::new((1,&b0), (2,&b1));
+                    let proxy = super::BinarySumProxy::new(1, &b0, 1, &b1, 1);
                     encoder.encode(bit, &proxy).unwrap();
                 }
                 b0.update(bit, factor0);
@@ -785,7 +791,7 @@ mod test {
         decoder.start().unwrap();
         for &byte in bytes.iter() {
             let high = {
-                let proxy = super::TableSumProxy::new((2,&t0), (1,&t1));
+                let proxy = super::TableSumProxy::new(2, &t0, 1, &t1, 0);
                 decoder.decode(&proxy).unwrap()
             };
             t0.update(high, update0, 1);
@@ -793,7 +799,7 @@ mod test {
             let mut value = (high<<4) as u8;
             for i in range(0,4) {
                 let bit = {
-                    let proxy = super::BinarySumProxy::new((1,&b0), (2,&b1));
+                    let proxy = super::BinarySumProxy::new(1, &b0, 1, &b1, 1);
                     decoder.decode(&proxy).unwrap()
                 };
                 value += (bit as u8)<<i;
