@@ -127,8 +127,8 @@ impl<R: Reader> Reader for Decoder<R> {
 #[cfg(test)]
 #[allow(warnings)]
 mod test {
+    use rand;
     use test;
-    use std::rand;
     use std::io::{BufReader, MemWriter};
     use super::{Decoder};
     use std::str;
