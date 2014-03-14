@@ -34,6 +34,27 @@ pub type Symbol = u8;
 pub type Rank = u8;
 pub static TotalSymbols: uint = 0x100;
 
+/// Distance coding context
+pub struct Context<D> {
+    /// current symbol
+    symbol: Symbol,
+    /// last known MTF rank
+    last_rank: Option<Rank>,
+    /// maximum possible distance
+    distance_limit: D,
+}
+
+impl<D> Context<D> {
+    /// create a new distance context
+    pub fn new(s: Symbol, r: Option<Rank>, d: D) -> Context<D> {
+        Context {
+            symbol: s,
+            last_rank: r,
+            distance_limit: d,
+        }
+    }
+}
+
 
 /// encode a block of bytes 'input'
 /// write output distance stream into 'distances'
@@ -98,13 +119,14 @@ pub fn encode_simple<D: Clone + Eq + NumCast>(input: &[Symbol]) -> (~[Symbol],~[
 
 /// Decode a block of distances with a list of initial symbols
 pub fn decode(alphabet: Option<&[Symbol]>, output: &mut [Symbol], mtf: &mut MTF,
-        fn_dist: |Symbol|->io::IoResult<uint>) -> io::IoResult<()> {
+        fn_dist: |&Context<uint>|->io::IoResult<uint>) -> io::IoResult<()> {
     let n = output.len();
     let mut next = [n, ..TotalSymbols];
+    let mut ranks = [0 as Rank, ..TotalSymbols];
     let alphabet_size = match alphabet  {
         Some([]) => {
             // alphabet is empty
-            assert_eq!(n,0);
+            assert_eq!(n, 0);
             return Ok(())
         },
         Some([sym]) => {
@@ -117,8 +139,9 @@ pub fn decode(alphabet: Option<&[Symbol]>, output: &mut [Symbol], mtf: &mut MTF,
         Some(list) => {
             // given fixed alphabet
             for (rank,&sym) in list.iter().enumerate()   {
+                let ctx = Context::new(sym, None, n);
                 // initial distances are not ordered
-                next[sym as uint] = match fn_dist(sym) {
+                next[sym] = match fn_dist(&ctx) {
                     Ok(d) => d, // + (rank as Distance)
                     Err(e) => return Err(e)
                 };
@@ -133,11 +156,14 @@ pub fn decode(alphabet: Option<&[Symbol]>, output: &mut [Symbol], mtf: &mut MTF,
         None => {
             // alphabet is large, total range of symbols is assumed
             for i in range(0,TotalSymbols) {
-                next[i] = match fn_dist(i as Symbol) {
+                let sym = i as Symbol;
+                let ctx = Context::new(sym, None, n);
+                next[i] = match fn_dist(&ctx) {
                     Ok(d) => d,
                     Err(e) => return Err(e)
                 };
-                mtf.symbols[i] = i as Symbol;
+                mtf.symbols[i] = sym;
+                ranks[sym] = i as Rank;
                 debug!("\tRegistering symbol {} at position {}", i, next[i]);
             }
             // sort ranks by first occurrence
@@ -154,7 +180,8 @@ pub fn decode(alphabet: Option<&[Symbol]>, output: &mut [Symbol], mtf: &mut MTF,
             output[i] = sym;
             i += 1;
         }
-        let future = match fn_dist(sym) {
+        let ctx = Context::new(sym, Some(ranks[sym]), n-i);
+        let future = match fn_dist(&ctx) {
             Ok(d) => stop + d,
             Err(e) => return Err(e)
         };
@@ -173,7 +200,8 @@ pub fn decode(alphabet: Option<&[Symbol]>, output: &mut [Symbol], mtf: &mut MTF,
         }
         mtf.symbols[rank-1] = sym;
         debug!("\t\tAssigning future pos {} for symbol {}", future+rank-1, sym);
-        next[sym as uint] = future+rank-1;
+        next[sym] = future+rank-1;
+        ranks[sym] = rank as Rank;
     }
     assert_eq!(next.iter().position(|&d| d<n || d>=n+alphabet_size), None);
     assert_eq!(i, n);
@@ -184,7 +212,7 @@ pub fn decode(alphabet: Option<&[Symbol]>, output: &mut [Symbol], mtf: &mut MTF,
 pub fn decode_simple<D: ToPrimitive>(n: uint, alphabet: &[Symbol], distances: &[D]) -> ~[Symbol] {
     let mut output = vec::from_elem(n, 0 as Symbol);
     let mut di = 0u;
-    decode(Some(alphabet), output.as_mut_slice(), &mut MTF::new(), |_sym| {
+    decode(Some(alphabet), output.as_mut_slice(), &mut MTF::new(), |_ctx| {
         di += 1;
         if di > distances.len() {
             Err(io::standard_error(io::EndOfFile))
