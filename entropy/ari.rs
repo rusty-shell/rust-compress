@@ -50,15 +50,15 @@ static border_symbol_mask: u32 = ((symbol_total-1) << border_excess) as u32;
 /// Gets probability ranges on the input, produces whole bytes of code on the output,
 /// where the code is an arbitrary fixed-ppoint value inside the resulting probability range.
 pub struct RangeEncoder {
-    priv low: Border,
-    priv hai: Border,
+    low: Border,
+    hai: Border,
     /// The minimum distance between low and hai to keep at all times,
     /// has to be at least the largest incoming 'total',
     /// and optimally many times larger
-    threshold: Border,
+    pub threshold: Border,
     // tune parameters
-    priv bits_lost_on_threshold_cut: f32,
-    priv bits_lost_on_division: f32,
+    bits_lost_on_threshold_cut: f32,
+    bits_lost_on_division: f32,
 }
 
 impl RangeEncoder {
@@ -192,10 +192,10 @@ pub fn decode<M: Model>(code: Border, model: &M, re: &mut RangeEncoder) -> (Valu
 
 /// An arithmetic encoder helper
 pub struct Encoder<W> {
-    priv stream: W,
-    priv range: RangeEncoder,
-    priv buffer: ~[Symbol],
-    priv bytes_written: uint,
+    stream: W,
+    range: RangeEncoder,
+    buffer: ~[Symbol],
+    bytes_written: uint,
 }
 
 impl<W: Writer> Encoder<W> {
@@ -247,10 +247,10 @@ impl<W: Writer> Encoder<W> {
 
 /// An arithmetic decoder helper
 pub struct Decoder<R> {
-    priv stream: R,
-    priv range: RangeEncoder,
-    priv code: Border,
-    priv bytes_read: uint,
+    stream: R,
+    range: RangeEncoder,
+    code: Border,
+    bytes_read: uint,
 }
 
 impl<R: Reader> Decoder<R> {
@@ -297,9 +297,9 @@ impl<R: Reader> Decoder<R> {
 /// A binary value frequency model
 pub struct BinaryModel {
     /// frequency of bit 0
-    priv zero: Border,
+    zero: Border,
     /// total frequency (constant)
-    priv total: Border,
+    total: Border,
 }
 
 impl BinaryModel {
@@ -389,11 +389,11 @@ impl Model for BinaryModel {
 /// A proxy model for the combination of two binary models
 /// using equation: (wa * A + wb * B) >> ws
 pub struct BinarySumProxy<'a> {
-    priv first: &'a BinaryModel,
-    priv second: &'a BinaryModel,
-    priv w_first: Border,
-    priv w_second: Border,
-    priv w_shift: Border,
+    first: &'a BinaryModel,
+    second: &'a BinaryModel,
+    w_first: Border,
+    w_second: Border,
+    w_shift: Border,
 }
 
 impl<'a> BinarySumProxy<'a> {
@@ -451,14 +451,14 @@ pub type Frequency = u16;
 /// A simple table of frequencies.
 pub struct FrequencyTable {
     /// sum of frequencies
-    priv total: Border,
+    total: Border,
     /// main table: value -> Frequency
-    priv table: ~[Frequency],
+    table: ~[Frequency],
     /// maximum allowed sum of frequency,
     /// should be smaller than RangeEncoder::threshold
-    priv cut_threshold: Border,
+    cut_threshold: Border,
     /// number of bits to shift on cut
-    priv cut_shift: uint,
+    cut_shift: uint,
 }
 
 impl FrequencyTable {
@@ -554,11 +554,11 @@ impl Model for FrequencyTable {
 /// A proxy model for the sum of two frequency tables
 /// using equation: (wa * A + wb * B) >> ws
 pub struct TableSumProxy<'a> {
-    priv first: &'a FrequencyTable,
-    priv second: &'a FrequencyTable,
-    priv w_first: Border,
-    priv w_second: Border,
-    priv w_shift: Border,
+    first: &'a FrequencyTable,
+    second: &'a FrequencyTable,
+    w_first: Border,
+    w_second: Border,
+    w_shift: Border,
 }
 
 impl<'a> TableSumProxy<'a> {
@@ -613,9 +613,9 @@ impl<'a> Model for TableSumProxy<'a> {
 /// uses a special terminator code to end the stream
 pub struct ByteEncoder<W> {
     /// A lower level encoder
-    encoder: Encoder<W>,
+    pub encoder: Encoder<W>,
     /// A basic frequency table
-    freq: FrequencyTable,
+    pub freq: FrequencyTable,
 }
 
 impl<W: Writer> ByteEncoder<W> {
@@ -656,11 +656,11 @@ impl<W: Writer> Writer for ByteEncoder<W> {
 /// expects a special terminator code for the end of the stream
 pub struct ByteDecoder<R> {
     /// A lower level decoder
-    decoder: Decoder<R>,
+    pub decoder: Decoder<R>,
     /// A basic frequency table
-    freq: FrequencyTable,
+    pub freq: FrequencyTable,
     /// Remember if we found the terminator code
-    priv is_eof: bool,
+    is_eof: bool,
 }
 
 impl<R: Reader> ByteDecoder<R> {

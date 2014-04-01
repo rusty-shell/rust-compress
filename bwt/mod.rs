@@ -61,7 +61,7 @@ pub static ALPHABET_SIZE: uint = 0x100;
 /// Radix sorting primitive
 pub struct Radix    {
     /// number of occurancies (frequency) per symbox
-    freq    : [uint, ..ALPHABET_SIZE+1],
+    pub freq    : [uint, ..ALPHABET_SIZE+1],
 }
 
 impl Radix  {
@@ -158,9 +158,9 @@ pub fn compute_suffixes<SUF: NumCast + ToPrimitive>(input: &[Symbol], suf_array:
 
 /// An iterator over BWT output
 pub struct TransformIterator<'a, SUF> {
-    priv input      : &'a [Symbol],
-    priv suf_iter   : iter::Enumerate<vec::Items<'a,SUF>>,
-    priv origin     : Option<uint>,
+    input      : &'a [Symbol],
+    suf_iter   : iter::Enumerate<vec::Items<'a,SUF>>,
+    origin     : Option<uint>,
 }
 
 impl<'a, SUF> TransformIterator<'a, SUF> {
@@ -231,10 +231,10 @@ pub fn compute_inversion_table<SUF: NumCast>(input: &[Symbol], origin: uint, tab
 /// An iterator over inverse BWT
 /// Run time: O(N), memory: N words (table)
 pub struct InverseIterator<'a, SUF> {
-    priv input      : &'a [Symbol],
-    priv table      : &'a [SUF],
-    priv origin     : uint,
-    priv current    : uint,
+    input      : &'a [Symbol],
+    table      : &'a [SUF],
+    origin     : uint,
+    current    : uint,
 }
 
 impl<'a, SUF> InverseIterator<'a, SUF> {
@@ -308,16 +308,16 @@ pub struct Decoder<R> {
     /// The internally wrapped reader. This is exposed so it may be moved out
     /// of. Note that if data is read from the reader while decoding is in
     /// progress the output stream will get corrupted.
-    r: R,
-    priv start  : uint,
+    pub r: R,
+    start  : uint,
 
-    priv temp   : ~[u8],
-    priv output : ~[u8],
-    priv table  : ~[uint],
+    temp   : ~[u8],
+    output : ~[u8],
+    table  : ~[uint],
 
-    priv header         : bool,
-    priv max_block_size : uint,
-    priv extra_memory   : bool,
+    header         : bool,
+    max_block_size : uint,
+    extra_memory   : bool,
 }
 
 impl<R: Reader> Decoder<R> {
@@ -425,11 +425,11 @@ impl<R: Reader> Reader for Decoder<R> {
 /// This structure is used to compress a stream of bytes using the BWT.
 /// This is a wrapper around an internal writer which bytes will be written to.
 pub struct Encoder<W> {
-    priv w: W,
-    priv buf: ~[u8],
-    priv suf: ~[uint],
-    priv wrote_header: bool,
-    priv block_size: uint,
+    w: W,
+    buf: ~[u8],
+    suf: ~[uint],
+    wrote_header: bool,
+    block_size: uint,
 }
 
 impl<W: Writer> Encoder<W> {

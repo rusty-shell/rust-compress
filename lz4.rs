@@ -133,19 +133,19 @@ pub struct Decoder<R> {
     /// The internally wrapped reader. This is exposed so it may be moved out
     /// of. Note that if data is read from the reader while decoding is in
     /// progress the output stream will get corrupted.
-    r: R,
+    pub r: R,
 
-    priv temp: ~[u8],
-    priv output: ~[u8],
+    temp: ~[u8],
+    output: ~[u8],
 
-    priv start: uint,
-    priv end: uint,
-    priv eof: bool,
+    start: uint,
+    end: uint,
+    eof: bool,
 
-    priv header: bool,
-    priv blk_checksum: bool,
-    priv stream_checksum: bool,
-    priv max_block_size: uint,
+    header: bool,
+    blk_checksum: bool,
+    stream_checksum: bool,
+    max_block_size: uint,
 }
 
 impl<R: Reader> Decoder<R> {
@@ -316,11 +316,11 @@ impl<R: Reader> Reader for Decoder<R> {
 /// compression algorithm. This is a wrapper around an internal writer which
 /// bytes will be written to.
 pub struct Encoder<W> {
-    priv w: W,
-    priv buf: ~[u8],
-    priv tmp: ~[u8],
-    priv wrote_header: bool,
-    priv limit: uint,
+    w: W,
+    buf: ~[u8],
+    tmp: ~[u8],
+    wrote_header: bool,
+    limit: uint,
 }
 
 impl<W: Writer> Encoder<W> {

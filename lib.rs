@@ -1,8 +1,8 @@
-#[crate_id = "compress"];
-#[crate_type = "rlib"];
-#[crate_type = "dylib"];
-#[deny(warnings, missing_doc)];
-#[feature(macro_rules, phase)];
+#![crate_id = "compress"]
+#![crate_type = "rlib"]
+#![crate_type = "dylib"]
+#![deny(warnings, missing_doc)]
+#![feature(macro_rules, phase)]
 
 //! dox (placeholder)
 

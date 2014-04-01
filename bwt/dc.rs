@@ -86,13 +86,13 @@ pub fn encode_simple<D: Clone + Eq + NumCast>(input: &[Symbol]) -> (~[Symbol],~[
     }else   {
         let mut raw_dist: ~[D] = vec::from_elem(n, NumCast::from(0).unwrap());
         let pairs = encode(input, raw_dist, &mut MTF::new());
-        let symbols = pairs.map(|&(sym,_)| sym);
+        let symbols: ~[Symbol] = pairs.iter().map(|&(sym,_)| sym).collect();
         let init_iter = pairs.iter().map(|pair| { let (_, ref d) = *pair; d.clone() });
         let filler: D = NumCast::from(n).unwrap();
         // chain initial distances with intermediate ones
         let raw_iter = raw_dist.iter().filter_map(|d| if *d!=filler {Some(d.clone())} else {None});
         let mut combined = init_iter.chain(raw_iter);
-        (symbols,combined.collect())
+        (symbols, combined.collect())
     }
 }
 

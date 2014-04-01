@@ -1,7 +1,7 @@
-#[crate_id = "app"];
-#[crate_type = "bin"];
-#[deny(warnings, missing_doc)];
-#[feature(macro_rules, phase)];
+#![crate_id = "app"]
+#![crate_type = "bin"]
+#![deny(warnings, missing_doc)]
+#![feature(macro_rules, phase)]
 
 //! A rust-compress application that allows testing of implemented
 //! algorithms and their combinations using a simple command line.

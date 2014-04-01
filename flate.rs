@@ -63,11 +63,11 @@ fn error<T>(e: Error) -> io::IoResult<T> {
 struct HuffmanTree {
     /// An array which counts the number of codes which can be found at the
     /// index's bit length, or count[n] is the number of n-bit codes
-    count: [u16, ..MAXBITS + 1],
+    pub count: [u16, ..MAXBITS + 1],
 
     /// Symbols in this huffman tree in sorted order. This preserves the
     /// original huffman codes
-    symbol: [u16, ..MAXCODES],
+    pub symbol: [u16, ..MAXCODES],
 }
 
 impl HuffmanTree {
@@ -157,17 +157,17 @@ fn main() {
 /// internal reader which is used as the source of all data.
 pub struct Decoder<R> {
     /// Wrapped reader which is exposed to allow getting it back.
-    r: R,
+    pub r: R,
 
-    priv output: ~[u8],
-    priv outpos: uint,
+    output: ~[u8],
+    outpos: uint,
 
-    priv block: ~[u8],
-    priv pos: uint,
+    block: ~[u8],
+    pos: uint,
 
-    priv bitbuf: uint,
-    priv bitcnt: uint,
-    priv eof: bool,
+    bitbuf: uint,
+    bitcnt: uint,
+    eof: bool,
 }
 
 impl<R: Reader> Decoder<R> {

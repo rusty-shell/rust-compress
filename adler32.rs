@@ -6,8 +6,8 @@
 static MOD_ADLER: u32 = 65521;
 
 pub struct State {
-    priv a: u32,
-    priv b: u32,
+    a: u32,
+    b: u32,
 }
 
 impl State {

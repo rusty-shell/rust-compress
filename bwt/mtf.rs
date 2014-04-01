@@ -39,7 +39,7 @@ pub static TOTAL_SYMBOLS: uint = 0x100;
 /// MoveToFront encoder/decoder
 pub struct MTF {
     /// rank-ordered list of unique Symbols
-    symbols: [Symbol, ..TOTAL_SYMBOLS],
+    pub symbols: [Symbol, ..TOTAL_SYMBOLS],
 }
 
 impl MTF {
@@ -89,8 +89,8 @@ impl MTF {
 
 /// A simple MTF stream encoder
 pub struct Encoder<W> {
-    priv w: W,
-    priv mtf: MTF,
+    w: W,
+    mtf: MTF,
 }
 
 impl<W> Encoder<W> {
@@ -127,9 +127,9 @@ impl<W: Writer> Writer for Encoder<W> {
 
 /// A simple MTF stream decoder
 pub struct Decoder<R> {
-    priv r: R,
-    priv mtf: MTF,
-    priv eof: bool,
+    r: R,
+    mtf: MTF,
+    eof: bool,
 }
 
 impl<R> Decoder<R> {

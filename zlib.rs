@@ -26,9 +26,9 @@ use flate;
 /// Structure used to decode a ZLIB-encoded stream. The wrapped stream can be
 /// re-acquired through the unwrap() method.
 pub struct Decoder<R> {
-    priv hash: adler32::State,
-    priv inner: flate::Decoder<R>,
-    priv read_header: bool,
+    hash: adler32::State,
+    inner: flate::Decoder<R>,
+    read_header: bool,
 }
 
 impl<R: Reader> Decoder<R> {
