@@ -35,6 +35,7 @@ pub type Rank = u8;
 pub static TotalSymbols: uint = 0x100;
 
 /// Distance coding context
+/// Has all the information potentially needed by the underlying coding model
 pub struct Context<D> {
     /// current symbol
     symbol: Symbol,
@@ -64,7 +65,7 @@ pub fn encode<D: Clone + Eq + NumCast>(input: &[Symbol], distances: &mut [D], mt
     let n = input.len();
     assert_eq!(distances.len(), n);
     let mut last = [n, ..TotalSymbols];
-    let mut unique: ~[(Symbol,D)] = ~[];
+    let mut unique: ~[(Symbol,D)] = vec::with_capacity(TotalSymbols);
     let filler: D = NumCast::from(n).unwrap();
     for (i,&sym) in input.iter().enumerate() {
         distances[i] = filler.clone();
@@ -99,6 +100,7 @@ pub fn encode<D: Clone + Eq + NumCast>(input: &[Symbol], distances: &mut [D], mt
     unique
 }
 
+
 /// encode with "batteries included" for quick testing
 pub fn encode_simple<D: Clone + Eq + NumCast>(input: &[Symbol]) -> (~[Symbol],~[D]) {
     let n = input.len();
@@ -107,71 +109,52 @@ pub fn encode_simple<D: Clone + Eq + NumCast>(input: &[Symbol]) -> (~[Symbol],~[
     }else   {
         let mut raw_dist: ~[D] = vec::from_elem(n, NumCast::from(0).unwrap());
         let pairs = encode(input, raw_dist, &mut MTF::new());
-        let symbols: ~[Symbol] = pairs.iter().map(|&(sym,_)| sym).collect();
+        let mut symbols = pairs.iter().map(|&(sym,_)| sym);
         let init_iter = pairs.iter().map(|pair| { let (_, ref d) = *pair; d.clone() });
         let filler: D = NumCast::from(n).unwrap();
         // chain initial distances with intermediate ones
         let raw_iter = raw_dist.iter().filter_map(|d| if *d!=filler {Some(d.clone())} else {None});
         let mut combined = init_iter.chain(raw_iter);
-        (symbols, combined.collect())
+        (symbols.collect(), combined.collect())
     }
 }
 
-/// Decode a block of distances with a list of initial symbols
-pub fn decode(alphabet: Option<&[Symbol]>, output: &mut [Symbol], mtf: &mut MTF,
-        fn_dist: |&Context<uint>|->io::IoResult<uint>) -> io::IoResult<()> {
+/// Decode a block of distances given initial symbol distances
+pub fn decode_body(mut next: [uint,..TotalSymbols], output: &mut [Symbol], mtf: &mut MTF,
+        fn_dist: |Context<uint>|->io::IoResult<uint>) -> io::IoResult<()> {
+
     let n = output.len();
-    let mut next = [n, ..TotalSymbols];
-    let mut ranks = [0 as Rank, ..TotalSymbols];
-    let alphabet_size = match alphabet  {
-        Some([]) => {
-            // alphabet is empty
-            assert_eq!(n, 0);
-            return Ok(())
-        },
-        Some([sym]) => {
-            // there is only one known symbol
-            for out in output.mut_iter()    {
-                *out = sym;
-            }
-            return Ok(())
-        }
-        Some(list) => {
-            // given fixed alphabet
-            for (rank,&sym) in list.iter().enumerate()   {
-                let ctx = Context::new(sym, None, n);
-                // initial distances are not ordered
-                next[sym] = match fn_dist(&ctx) {
-                    Ok(d) => d, // + (rank as Distance)
-                    Err(e) => return Err(e)
-                };
-                mtf.symbols[rank] = sym;
-                debug!("\tRegistering symbol {} of rank {} at position {}", sym, rank, next[sym as uint]);
-            }
-            for rank in range(list.len(),TotalSymbols) {
-                mtf.symbols[rank] = 0; //erazing unused symbols
-            }
-            list.len()
-        },
-        None => {
-            // alphabet is large, total range of symbols is assumed
-            for i in range(0,TotalSymbols) {
-                let sym = i as Symbol;
-                let ctx = Context::new(sym, None, n);
-                next[i] = match fn_dist(&ctx) {
-                    Ok(d) => d,
-                    Err(e) => return Err(e)
-                };
-                mtf.symbols[i] = sym;
-                ranks[sym] = i as Rank;
-                debug!("\tRegistering symbol {} at position {}", i, next[i]);
-            }
-            // sort ranks by first occurrence
-            mtf.symbols.mut_slice_to(TotalSymbols).sort_by(|&a,&b| next[a as uint].cmp(&next[b as uint]));
-            TotalSymbols
-        },
-    };
     let mut i = 0u;
+    for (sym,d) in next.iter().enumerate() {
+        if *d < n {
+            let mut j = i;
+            while j>0u && next[mtf.symbols[j-1] as uint] > *d {
+                mtf.symbols[j] = mtf.symbols[j-1];
+                j -= 1;
+            }
+            mtf.symbols[j] = sym as Symbol;
+            i += 1;
+        }
+    }
+    if i<=1 {
+        // redundant alphabet case
+        let sym = mtf.symbols[0];
+        for out in output.mut_iter()    {
+            *out = sym;
+        }
+        return Ok(())
+    }
+
+    let alphabet_size = i;
+    let mut ranks = [0 as Rank, ..TotalSymbols];
+    for rank in range(0, i) {
+        let sym = mtf.symbols[rank];
+        debug!("\tRegistering symbol {} of rank {} at position {}",
+            sym, rank, next[sym as uint]);
+        ranks[sym as uint] = rank as Rank;
+    }
+
+    i = 0u;
     while i<n {
         let sym = mtf.symbols[0];
         let stop = next[mtf.symbols[1] as uint];
@@ -180,8 +163,8 @@ pub fn decode(alphabet: Option<&[Symbol]>, output: &mut [Symbol], mtf: &mut MTF,
             output[i] = sym;
             i += 1;
         }
-        let ctx = Context::new(sym, Some(ranks[sym]), n-i);
-        let future = match fn_dist(&ctx) {
+        let ctx = Context::new(sym, Some(ranks[sym as uint]), n-i);
+        let future = match fn_dist(ctx) {
             Ok(d) => stop + d,
             Err(e) => return Err(e)
         };
@@ -200,12 +183,45 @@ pub fn decode(alphabet: Option<&[Symbol]>, output: &mut [Symbol], mtf: &mut MTF,
         }
         mtf.symbols[rank-1] = sym;
         debug!("\t\tAssigning future pos {} for symbol {}", future+rank-1, sym);
-        next[sym] = future+rank-1;
-        ranks[sym] = rank as Rank;
+        next[sym as uint] = future+rank-1;
+        ranks[sym as uint] = rank as Rank;
     }
     assert_eq!(next.iter().position(|&d| d<n || d>=n+alphabet_size), None);
     assert_eq!(i, n);
     Ok(())
+}
+
+/// Decode a block of distances with a list of initial symbols
+pub fn decode(alphabet: Option<&[Symbol]>, output: &mut [Symbol], mtf: &mut MTF,
+    fn_dist: |Context<uint>|->io::IoResult<uint>) -> io::IoResult<()> {
+
+    let n = output.len();
+    let mut next = [n, ..TotalSymbols];
+    match alphabet {
+        Some(list) => {
+            // given fixed alphabet
+            for &sym in list.iter() {
+                let ctx = Context::new(sym, None, n);
+                // initial distances are not ordered
+                next[sym as uint] = match fn_dist(ctx) {
+                    Ok(d) => d, // + (rank as Distance)
+                    Err(e) => return Err(e)
+                };
+            }
+        },
+        None => {
+            // alphabet is large, total range of symbols is assumed
+            for i in range(0, TotalSymbols) {
+                let ctx = Context::new(i as Symbol, None, n);
+                next[i] = match fn_dist(ctx) {
+                    Ok(d) => d,
+                    Err(e) => return Err(e)
+                };
+            }
+        },
+    }
+
+    decode_body(next, output, mtf, fn_dist)
 }
 
 /// decode with "batteries included" for quick testing
