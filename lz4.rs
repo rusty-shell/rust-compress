@@ -25,7 +25,7 @@ can be found at https://github.com/bkaradzic/go-lz4.
 
 use std::io;
 use std::cmp;
-use std::vec;
+use vec = std::slice;
 
 static MAGIC: u32 = 0x184d2204;
 
@@ -245,7 +245,7 @@ impl<R: Reader> Decoder<R> {
                 let amt = (n & 0x7fffffff) as uint;
                 self.output.truncate(0);
                 self.output.reserve(amt);
-                try!(self.r.push_bytes(&mut self.output, amt));
+                try!(self.r.push_exact(&mut self.output, amt));
                 self.start = 0;
                 self.end = amt;
             }
@@ -255,7 +255,7 @@ impl<R: Reader> Decoder<R> {
                 let n = n as uint;
                 self.temp.truncate(0);
                 self.temp.reserve(n);
-                try!(self.r.push_bytes(&mut self.temp, n));
+                try!(self.r.push_exact(&mut self.temp, n));
 
                 let target = cmp::min(self.max_block_size, 4 * n / 3);
                 self.output.truncate(0);

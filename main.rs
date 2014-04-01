@@ -1,7 +1,7 @@
 #[crate_id = "app"];
 #[crate_type = "bin"];
 #[deny(warnings, missing_doc)];
-#[feature(macro_rules)];
+#[feature(macro_rules, phase)];
 
 //! A rust-compress application that allows testing of implemented
 //! algorithms and their combinations using a simple command line.
@@ -9,11 +9,13 @@
 //! echo -n "abracadabra" | ./app bwt | xxd
 //! echo "banana" | ./app bwt | ./app -d
 
+#[phase(syntax, link)] extern crate log;
 extern crate compress;
 extern crate collections;
 
 use collections::HashMap;
-use std::{io, os, str, vec};
+use std::{io, os, str};
+use vec = std::slice;
 use compress::{bwt, lz4};
 //use compress::entropy::ari;
 
@@ -136,7 +138,7 @@ pub fn main() {
         }
         let methods = vec::from_fn( input.read_u8().unwrap() as uint, |_| {
             let len = input.read_u8().unwrap() as uint;
-            let bytes = input.read_bytes(len).unwrap();
+            let bytes = input.read_exact(len).unwrap();
             str::from_utf8(bytes).unwrap().to_owned()
         });
         let mut rsum: ~Reader = ~input;

@@ -47,7 +47,8 @@ This is an original (mostly trivial) implementation.
 
 */
 
-use std::{cmp, io, iter, vec};
+use std::{cmp, io, iter};
+use vec = std::slice;
 
 pub mod dc;
 pub mod mtf;
@@ -203,7 +204,7 @@ pub fn encode<'a, SUF: NumCast + ToPrimitive>(input: &'a [Symbol], suf_array: &'
 pub fn encode_simple(input: &[Symbol]) -> (~[Symbol], uint) {
     let mut suf_array = vec::from_elem(input.len(), 0u);
     let mut iter = encode(input, suf_array);
-    let output = iter.to_owned_vec();
+    let output: ~[Symbol] = iter.collect();
     (output, iter.get_origin())
 }
 
@@ -275,7 +276,7 @@ pub fn decode<'a, SUF: NumCast>(input: &'a [Symbol], origin: uint, table: &'a mu
 /// A simplified BWT decode function, which allocates a temporary suffix array
 pub fn decode_simple(input: &[Symbol], origin: uint) -> ~[Symbol] {
     let mut suf = vec::from_elem(input.len(), 0 as uint);
-    decode(input, origin, suf).take(input.len()).to_owned_vec()
+    decode(input, origin, suf).take(input.len()).collect()
 }
 
 /// Decode without additional memory, can be greatly optimized
@@ -365,7 +366,7 @@ impl<R: Reader> Decoder<R> {
 
         self.temp.truncate(0);
         self.temp.reserve(n);
-        try!(self.r.push_bytes(&mut self.temp, n));
+        try!(self.r.push_exact(&mut self.temp, n));
 
         let origin = try!(self.r.read_le_u32()) as uint;
         self.output.truncate(0);
@@ -511,7 +512,7 @@ impl<W: Writer> Writer for Encoder<W> {
 mod test {
     use test;
     use std::io::{BufReader, MemWriter};
-    use std::vec;
+    use vec = std::slice;
     use super::{encode, decode, Decoder, Encoder};
 
     fn roundtrip(bytes: &[u8], extra_mem: bool) {
@@ -545,7 +546,7 @@ mod test {
         let mut suf = vec::from_elem(n, 0u16);
         let (output, origin) = {
             let mut to_iter = encode(input, suf);
-            let out = to_iter.to_owned_vec();
+            let out: ~[u8] = to_iter.collect();
             (out, to_iter.get_origin())
         };
         bh.iter(|| {

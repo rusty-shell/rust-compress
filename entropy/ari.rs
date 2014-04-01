@@ -32,7 +32,8 @@ This is an original implementation.
 
 */
 
-use std::{io, vec};
+use std::io;
+use vec = std::slice;
 #[cfg(tune)]
 use std::num;
 
@@ -276,7 +277,7 @@ impl<R: Reader> Decoder<R> {
         let (value,shift) = decode(self.code, model, &mut self.range);
         self.bytes_read += shift;
         for b in self.stream.bytes().take(shift) {
-            self.code = (self.code<<8) + (b as Border);
+            self.code = (self.code<<8) + (b.unwrap() as Border);
         }
         Ok(value)
     }
@@ -701,7 +702,7 @@ impl<R: Reader> Reader for ByteDecoder<R> {
 #[cfg(test)]
 mod test {
     use std::io::{BufReader, BufWriter, MemWriter, SeekSet};
-    use std::vec;
+    use vec = std::slice;
     use test;
 
     fn roundtrip(bytes: &[u8]) {

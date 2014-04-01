@@ -24,7 +24,7 @@
 
 use std::cmp;
 use std::io;
-use std::vec;
+use vec = std::slice;
 
 static MAXBITS: uint = 15;
 static MAXLCODES: u16 = 286;
@@ -226,7 +226,7 @@ impl<R: Reader> Decoder<R> {
         let len = try!(self.r.read_le_u16());
         let nlen = try!(self.r.read_le_u16());
         if !nlen != len { return error(InvalidStaticSize) }
-        try!(self.r.push_bytes(&mut self.block, len as uint));
+        try!(self.r.push_exact(&mut self.block, len as uint));
         self.update_output(0);
         self.bitcnt = 0;
         self.bitbuf = 0;

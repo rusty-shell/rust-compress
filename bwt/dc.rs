@@ -26,7 +26,8 @@ Thanks to Edgar Binder for inventing DC!
 
 */
 
-use std::{io, vec};
+use std::io;
+use vec = std::slice;
 use super::mtf::MTF;
 
 pub type Symbol = u8;
@@ -212,16 +213,16 @@ mod test {
         info!("Roundtrip DC (full alphabet) of size {}", n);
         let mut mtf = super::MTF::new();
         // encoding with full alphabet
-        let mut raw_dist = std::vec::from_elem(n, 0u);
+        let mut raw_dist = std::slice::from_elem(n, 0u);
         let pairs = super::encode(bytes, raw_dist, &mut mtf);
-        let mut alphabet = std::vec::from_elem(0x100, n);
+        let mut alphabet = std::slice::from_elem(0x100, n);
         for &(sym,dist) in pairs.iter() {
             alphabet[sym] = dist;
         }
         let raw_iter = raw_dist.iter().filter(|&d| *d!=n);
-        let distances = alphabet.iter().chain(raw_iter).to_owned_vec();
+        let distances: ~[&uint] = alphabet.iter().chain(raw_iter).collect();
         // decoding with full alphabet
-        let mut decoded = std::vec::from_elem(n, 0 as super::Symbol);
+        let mut decoded = std::slice::from_elem(n, 0 as super::Symbol);
         let mut di = 0u;
         super::decode(None, decoded.as_mut_slice(), &mut mtf, |_sym| {
             di += 1;
@@ -240,6 +241,7 @@ mod test {
 
     #[test]
     fn roundtrips_long() {
-        roundtrip_full_alphabet(std::iter::range_inclusive(0u8, 0xFFu8).to_owned_vec());
+        let input: ~[u8] = std::iter::range_inclusive(0u8, 0xFFu8).collect();
+        roundtrip_full_alphabet(input);
     }
 }
