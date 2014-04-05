@@ -83,7 +83,7 @@ impl Radix  {
     /// count elements in the input
     pub fn gather(&mut self, input: &[Symbol])  {
         for &b in input.iter()  {
-            self.freq[b] += 1;
+            self.freq[b as uint] += 1;
         }
     }
 
@@ -99,11 +99,11 @@ impl Radix  {
 
     /// return next byte position, advance it internally
     pub fn place(&mut self, b: Symbol)-> uint   {
-        let pos = self.freq[b];
-        assert!(self.freq[b] < self.freq[(b as uint)+1],
+        let pos = self.freq[b as uint];
+        assert!(self.freq[b as uint] < self.freq[(b as uint)+1],
             "Unable to place symbol {} at offset {}",
             b, pos);
-        self.freq[b] += 1;
+        self.freq[b as uint] += 1;
         pos
     }
 
@@ -296,7 +296,7 @@ fn decode_minimal(input: &[Symbol], origin: uint, output: &mut [Symbol]) {
         let ch = input[i];
         output[n-j-1] = ch;
         let offset = input.slice_to(i).iter().count(|&k| k==ch);
-        radix.freq[ch] + offset
+        radix.freq[ch as uint] + offset
     });
 }
 

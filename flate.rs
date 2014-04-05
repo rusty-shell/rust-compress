@@ -81,7 +81,7 @@ impl HuffmanTree {
         };
         // Collect the lengths of all symbols
         for len in lens.iter() {
-            tree.count[*len] += 1;
+            tree.count[*len as uint] += 1;
         }
         // If there weren't actually any codes, then we're done
         if tree.count[0] as uint == lens.len() { return Ok(tree) }
@@ -106,8 +106,8 @@ impl HuffmanTree {
         // array generated above.
         for (sym, &len) in lens.iter().enumerate() {
             if len != 0 {
-                tree.symbol[offs[len]] = sym as u16;
-                offs[len] += 1;
+                tree.symbol[offs[len as uint] as uint] = sym as u16;
+                offs[len as uint] += 1;
             }
         }
         return Ok(tree);
@@ -129,7 +129,7 @@ impl HuffmanTree {
             code |= try!(s.bits(1));
             let count = self.count[len];
             if code < first + count {
-                return Ok(self.symbol[index + (code - first)])
+                return Ok(self.symbol[(index + (code - first)) as uint])
             }
             index += count;
             first += count;
@@ -282,12 +282,12 @@ impl<R: Reader> Decoder<R> {
                     if n as uint > EXTRALENS.len() {
                         return error(InvalidHuffmanCode)
                     }
-                    let len = EXTRALENS[n] +
-                              try!(self.bits(EXTRABITS[n] as uint));
+                    let len = EXTRALENS[n as uint] +
+                              try!(self.bits(EXTRABITS[n as uint] as uint));
 
                     let len = len as uint;
 
-                    let dist = try!(dist.decode(self));
+                    let dist = try!(dist.decode(self)) as uint;
                     let dist = EXTRADIST[dist] +
                                try!(self.bits(EXTRADBITS[dist] as uint));
                     let dist = dist as uint;
@@ -396,7 +396,7 @@ impl<R: Reader> Decoder<R> {
             16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15,
         ];
         let mut lengths = [0, ..19];
-        for i in range(0, hclen) {
+        for i in range(0, hclen as uint) {
             lengths[ORDER[i]] = try!(self.bits(3));
         }
         let tree = try!(HuffmanTree::construct(lengths));
@@ -409,14 +409,14 @@ impl<R: Reader> Decoder<R> {
             let symbol = try!(tree.decode(self));
             match symbol {
                 n if n < 16 => {
-                    lengths[i] = symbol;
+                    lengths[i as uint] = symbol;
                     i += 1;
                 }
                 16 if i == 0 => return error(InvalidHuffmanHeaderSymbol),
                 16 => {
-                    let prev = lengths[i - 1];
+                    let prev = lengths[i as uint - 1];
                     for _ in range(0, try!(self.bits(2)) + 3) {
-                        lengths[i] = prev;
+                        lengths[i as uint] = prev;
                         i += 1;
                     }
                 }

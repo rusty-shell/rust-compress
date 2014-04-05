@@ -61,9 +61,9 @@ impl MTF {
         if next == sym {
             return 0
         }
-        let mut rank: Rank = 1u8;
+        let mut rank: Rank = 1;
         loop {
-            mem::swap(&mut self.symbols[rank], &mut next);
+            mem::swap(&mut self.symbols[rank as uint], &mut next);
             if next == sym {
                 break;
             }
@@ -76,9 +76,9 @@ impl MTF {
 
     /// decode a rank into its symbol
     pub fn decode(&mut self, rank: Rank) -> Symbol {
-        let sym = self.symbols[rank];
+        let sym = self.symbols[rank as uint];
         debug!("\tDecoding rank {} with symbol {}", rank, sym);
-        for i in iter::range_inclusive(1,rank).rev() {
+        for i in iter::range_inclusive(1,rank as uint).rev() {
             self.symbols[i] = self.symbols[i-1];
         }
         self.symbols[0] = sym;

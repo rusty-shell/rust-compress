@@ -47,8 +47,8 @@ pub fn encode<D: Clone + Eq + NumCast>(input: &[Symbol], distances: &mut [D], mt
     let filler: D = NumCast::from(n).unwrap();
     for (i,&sym) in input.iter().enumerate() {
         distances[i] = filler.clone();
-        let base = last[sym];
-        last[sym] = i;
+        let base = last[sym as uint];
+        last[sym as uint] = i;
         debug!("\tProcessing symbol {} at position {}, last known at {}", sym, i, base);
         if base == n {
             let rank = unique.len();
@@ -68,7 +68,7 @@ pub fn encode<D: Clone + Eq + NumCast>(input: &[Symbol], distances: &mut [D], mt
         }
     }
     for (rank,&sym) in mtf.symbols.slice_to(unique.len()).iter().enumerate() {
-        let base = last[sym];
+        let base = last[sym as uint];
         debug!("\tSweep symbol {} of rank {}, last known at {}, encoding {}", sym, rank, base, n-base-rank-1);
         assert!(n >= base+rank+1);
         distances[base] = NumCast::from(n-base-rank-1).unwrap();
@@ -118,12 +118,12 @@ pub fn decode(alphabet: Option<&[Symbol]>, output: &mut [Symbol], mtf: &mut MTF,
             // given fixed alphabet
             for (rank,&sym) in list.iter().enumerate()   {
                 // initial distances are not ordered
-                next[sym] = match fn_dist(sym) {
+                next[sym as uint] = match fn_dist(sym) {
                     Ok(d) => d, // + (rank as Distance)
                     Err(e) => return Err(e)
                 };
                 mtf.symbols[rank] = sym;
-                debug!("\tRegistering symbol {} of rank {} at position {}", sym, rank, next[sym]);
+                debug!("\tRegistering symbol {} of rank {} at position {}", sym, rank, next[sym as uint]);
             }
             for rank in range(list.len(),TotalSymbols) {
                 mtf.symbols[rank] = 0; //erazing unused symbols
@@ -141,14 +141,14 @@ pub fn decode(alphabet: Option<&[Symbol]>, output: &mut [Symbol], mtf: &mut MTF,
                 debug!("\tRegistering symbol {} at position {}", i, next[i]);
             }
             // sort ranks by first occurrence
-            mtf.symbols.mut_slice_to(TotalSymbols).sort_by(|&a,&b| next[a].cmp(&next[b]));
+            mtf.symbols.mut_slice_to(TotalSymbols).sort_by(|&a,&b| next[a as uint].cmp(&next[b as uint]));
             TotalSymbols
         },
     };
     let mut i = 0u;
     while i<n {
         let sym = mtf.symbols[0];
-        let stop = next[mtf.symbols[1]];
+        let stop = next[mtf.symbols[1] as uint];
         debug!("\tFilling region [{}-{}) with symbol {}", i, stop, sym);
         while i<stop    {
             output[i] = sym;
@@ -161,19 +161,19 @@ pub fn decode(alphabet: Option<&[Symbol]>, output: &mut [Symbol], mtf: &mut MTF,
         debug!("\t\tLooking for future position {}", future);
         assert!(future <= n);
         let mut rank = 1u;
-        while rank < alphabet_size && future+rank > next[mtf.symbols[rank]] {
+        while rank < alphabet_size && future+rank > next[mtf.symbols[rank] as uint] {
             mtf.symbols[rank-1] = mtf.symbols[rank];
             rank += 1;
         }
         if rank < alphabet_size {
             debug!("\t\tFound sym {} of rank {} at position {}", mtf.symbols[rank],
-                rank, next[mtf.symbols[rank]]);
+                rank, next[mtf.symbols[rank] as uint]);
         }else {
             debug!("\t\tNot found");
         }
         mtf.symbols[rank-1] = sym;
         debug!("\t\tAssigning future pos {} for symbol {}", future+rank-1, sym);
-        next[sym] = future+rank-1;
+        next[sym as uint] = future+rank-1;
     }
     assert_eq!(next.iter().position(|&d| d<n || d>=n+alphabet_size), None);
     assert_eq!(i, n);
@@ -217,7 +217,7 @@ mod test {
         let pairs = super::encode(bytes, raw_dist, &mut mtf);
         let mut alphabet = std::slice::from_elem(0x100, n);
         for &(sym,dist) in pairs.iter() {
-            alphabet[sym] = dist;
+            alphabet[sym as uint] = dist;
         }
         let raw_iter = raw_dist.iter().filter(|&d| *d!=n);
         let distances: ~[&uint] = alphabet.iter().chain(raw_iter).collect();

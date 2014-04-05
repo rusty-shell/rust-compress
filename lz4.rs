@@ -211,7 +211,7 @@ impl<R: Reader> Decoder<R> {
 
         // bit 7 is reserved
         // bits 6-4 are the maximum block size
-        let max_block_size = MAX_SIZES[(bd >> 4) & 0x7];
+        let max_block_size = MAX_SIZES[(bd >> 4) as uint & 0x7];
         // bits 3-0 are reserved
 
         // read off other portions of the stream
