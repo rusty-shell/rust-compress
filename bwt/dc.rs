@@ -13,10 +13,8 @@ http://www.data-compression.info/Algorithms/DC/
 use compress::bwt::dc;
 
 let bytes = bytes!("abracadabra");
-let (alphabet,distances) = dc::encode_simple::<uint>(bytes);
-let decoded = dc::decode_simple(bytes.len(),
-                                alphabet.as_slice(),
-                                distances.as_slice());
+let distances = dc::encode_simple::<uint>(bytes);
+let decoded = dc::decode_simple(bytes.len(), distances.as_slice());
 ```
 
 # Credit
@@ -36,6 +34,7 @@ pub static TotalSymbols: uint = 0x100;
 
 /// Distance coding context
 /// Has all the information potentially needed by the underlying coding model
+#[deriving(Eq, Show)]
 pub struct Context {
     /// current symbol
     symbol: Symbol,
@@ -61,6 +60,7 @@ impl Context {
 pub struct EncodeIterator<'a,'b,D> {
     data: iter::Enumerate<iter::Zip<vec::Items<'a,Symbol>,vec::Items<'b,D>>>,
     pos: [uint, ..TotalSymbols],
+    last_active: uint,
     size: uint,
 }
 
@@ -71,12 +71,14 @@ impl<'a, 'b, D: NumCast> EncodeIterator<'a,'b,D> {
         EncodeIterator {
             data: input.iter().zip(dist.iter()).enumerate(),
             pos: init,
+            last_active: 0,
             size: input.len()
         }
     }
 
     /// get the initial symbol positions, to be called before iteration
     pub fn get_init<'c>(&'c self) -> &'c [uint, ..TotalSymbols] {
+        assert_eq!(self.last_active, 0);
         &self.pos
     }
 }
@@ -85,15 +87,18 @@ impl<'a, 'b, D: Clone + Eq + NumCast> Iterator<(D,Context)> for EncodeIterator<'
     fn next(&mut self) -> Option<(D,Context)> {
         let filler: D = NumCast::from(self.size).unwrap();
         self.data.find(|&(_,(_,d))| *d != filler).map(|(i,(sym,d))| {
-            let rank = i - self.pos[*sym as uint];
+            let rank = self.last_active - self.pos[*sym as uint];
             assert!(rank < TotalSymbols);
-            self.pos[*sym as uint] = i + d.to_uint().unwrap();
+            self.last_active = i+1;
+            self.pos[*sym as uint] = i + 1 + d.to_uint().unwrap();
+            debug!("Encoding distance {} at pos {} for symbol {}, computed rank {}, predicting next at {}",
+                d.to_uint().unwrap(), i, *sym, rank, self.pos[*sym as uint]);
             (d.clone(), Context::new(*sym, rank as Rank, self.size-i))
         })
     }
 }
 
-/// encode a block of bytes 'input'
+/// Encode a block of bytes 'input'
 /// write output distance stream into 'distances'
 /// return: unique bytes encountered in the order they appear
 /// with the corresponding initial distances
@@ -139,7 +144,7 @@ pub fn encode<'a, 'b, D: Clone + Copy + Eq + NumCast>(input: &'a [Symbol], dista
 }
 
 
-/// encode with "batteries included" for quick testing
+/// Encode version with "batteries included" for quick testing
 pub fn encode_simple<D: Clone + Copy + Eq + NumCast>(input: &[Symbol]) -> ~[D] {
     let n = input.len();
     let mut raw_dist: ~[D] = vec::from_elem(n, NumCast::from(0).unwrap());
@@ -180,7 +185,7 @@ pub fn decode(mut next: [uint,..TotalSymbols], output: &mut [Symbol], mtf: &mut 
         let sym = mtf.symbols[rank];
         debug!("\tRegistering symbol {} of rank {} at position {}",
             sym, rank, next[sym as uint]);
-        ranks[sym as uint] = rank as Rank;
+        ranks[sym as uint] = 0; //could use 'rank' but don't know how to derive it during encoding
     }
 
     i = 0u;
@@ -192,7 +197,7 @@ pub fn decode(mut next: [uint,..TotalSymbols], output: &mut [Symbol], mtf: &mut 
             output[i] = sym;
             i += 1;
         }
-        let ctx = Context::new(sym, ranks[sym as uint], n-i);
+        let ctx = Context::new(sym, ranks[sym as uint], n+1-i);
         let future = match fn_dist(ctx) {
             Ok(d) => stop + d,
             Err(e) => return Err(e)
@@ -213,14 +218,14 @@ pub fn decode(mut next: [uint,..TotalSymbols], output: &mut [Symbol], mtf: &mut 
         mtf.symbols[rank-1] = sym;
         debug!("\t\tAssigning future pos {} for symbol {}", future+rank-1, sym);
         next[sym as uint] = future+rank-1;
-        ranks[sym as uint] = rank as Rank;
+        ranks[sym as uint] = (rank-1) as Rank;
     }
     assert_eq!(next.iter().position(|&d| d<n || d>=n+alphabet_size), None);
     assert_eq!(i, n);
     Ok(())
 }
 
-/// decode with "batteries included" for quick testing
+/// Decode version with "batteries included" for quick testing
 pub fn decode_simple<D: ToPrimitive>(n: uint, distances: &[D]) -> ~[Symbol] {
     let mut output = vec::from_elem(n, 0 as Symbol);
     let mut init = [0u, ..TotalSymbols];
@@ -242,6 +247,8 @@ pub fn decode_simple<D: ToPrimitive>(n: uint, distances: &[D]) -> ~[Symbol] {
 
 #[cfg(test)]
 mod test {
+    use vec = std::slice;
+
     fn roundtrip(bytes: &[u8]) {
         info!("Roundtrip DC of size {}", bytes.len());
         let distances = super::encode_simple::<uint>(bytes);
@@ -250,10 +257,41 @@ mod test {
         assert_eq!(decoded.as_slice(), bytes);
     }
 
+    /// rountrip version that compares the coding contexts on the way
+    fn roundtrip_ctx(bytes: &[u8]) {
+        let n = bytes.len();
+        info!("Roundtrip DC context of size {}", n);
+        let mut mtf = super::MTF::new();
+        let mut raw_dist = vec::from_elem(n, 0u16);
+        let eniter = super::encode(bytes, raw_dist, &mut mtf);
+        let mut init = [0u, ..super::TotalSymbols];
+        for i in range(0u, super::TotalSymbols) {
+            init[i] = eniter.get_init()[i];
+        }
+        // implicit iterator copies, or we can gather in one pass and then split
+        let contexts: ~[super::Context] = eniter.map(|(_,ctx)| ctx).collect();
+        let distances: ~[u16] = eniter.map(|(d,_)| d).collect();
+        let mut output = vec::from_elem(n, 0u8);
+        let mut di = 0u;
+        super::decode(init, output.as_mut_slice(), &mut mtf, |ctx| {
+            assert_eq!(contexts[di], ctx);
+            di += 1;
+            Ok(distances[di-1] as uint)
+        }).unwrap();
+        assert_eq!(di, distances.len());
+        assert_eq!(output.as_slice(), bytes);
+    }
+
     #[test]
     fn roundtrips() {
         roundtrip(bytes!("teeesst_dc"));
         roundtrip(bytes!(""));
         roundtrip(include_bin!("../data/test.txt"));
+    }
+
+    #[test]
+    fn roundtrips_context() {
+        roundtrip_ctx(bytes!("teeesst_dc"));
+        roundtrip_ctx(bytes!("../data/test.txt"));
     }
 }
