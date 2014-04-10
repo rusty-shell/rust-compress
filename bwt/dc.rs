@@ -26,7 +26,7 @@ Thanks to Edgar Binder for inventing DC!
 
 */
 
-use std::io;
+use std::{io, iter};
 use vec = std::slice;
 use super::mtf::MTF;
 
@@ -36,32 +36,67 @@ pub static TotalSymbols: uint = 0x100;
 
 /// Distance coding context
 /// Has all the information potentially needed by the underlying coding model
-pub struct Context<D> {
+pub struct Context {
     /// current symbol
     symbol: Symbol,
     /// last known MTF rank
-    last_rank: Option<Rank>,
+    last_rank: Rank,
     /// maximum possible distance
-    distance_limit: D,
+    distance_limit: uint,
 }
 
-impl<D> Context<D> {
+impl Context {
     /// create a new distance context
-    pub fn new(s: Symbol, r: Option<Rank>, d: D) -> Context<D> {
+    pub fn new(s: Symbol, r: Rank, dmax: uint) -> Context {
         Context {
             symbol: s,
             last_rank: r,
-            distance_limit: d,
+            distance_limit: dmax,
         }
     }
 }
 
 
+/// DC body iterator, can be used to encode distances
+pub struct EncodeIterator<'a,'b,D> {
+    data: iter::Enumerate<iter::Zip<vec::Items<'a,Symbol>,vec::Items<'b,D>>>,
+    pos: [uint, ..TotalSymbols],
+    size: uint,
+}
+
+impl<'a, 'b, D: NumCast> EncodeIterator<'a,'b,D> {
+    /// fixme
+    pub fn new(input: &'a [Symbol], dist: &'b [D], next: &[D, ..TotalSymbols]) -> EncodeIterator<'a,'b,D> {
+        assert_eq!(input.len(), dist.len());
+        let mut pos = [0u, ..TotalSymbols];
+        for (pi,ni) in pos.mut_iter().zip(next.iter()) {
+            *pi = ni.to_uint().unwrap();
+        }
+        EncodeIterator {
+            data: input.iter().zip(dist.iter()).enumerate(),
+            pos: pos,
+            size: input.len()
+        }
+    }
+}
+
+impl<'a, 'b, D: Clone + Eq + NumCast> Iterator<(D,Context)> for EncodeIterator<'a,'b,D> {
+    fn next(&mut self) -> Option<(D,Context)> {
+        let filler: D = NumCast::from(self.size).unwrap();
+        self.data.find(|&(_,(_,d))| *d != filler).map(|(i,(sym,d))| {
+            let rank = i - self.pos[*sym as uint];
+            assert!(0<rank && rank<TotalSymbols);
+            self.pos[*sym as uint] = i + d.to_uint().unwrap();
+            (d.clone(), Context::new(*sym, rank as Rank, self.size-i))
+        })
+    }
+}
+
 /// encode a block of bytes 'input'
 /// write output distance stream into 'distances'
 /// return: unique bytes encountered in the order they appear
 /// with the corresponding initial distances
-pub fn encode<D: Clone + Eq + NumCast>(input: &[Symbol], distances: &mut [D], mtf: &mut MTF) -> ~[(Symbol,D)] {
+pub fn encode<'a, 'b, D: Clone + Eq + NumCast>(input: &'a [Symbol], distances: &'b mut [D], mtf: &mut MTF) -> ~[(Symbol,D)] {
     let n = input.len();
     assert_eq!(distances.len(), n);
     let mut last = [n, ..TotalSymbols];
@@ -121,7 +156,7 @@ pub fn encode_simple<D: Clone + Eq + NumCast>(input: &[Symbol]) -> (~[Symbol],~[
 
 /// Decode a block of distances given initial symbol distances
 pub fn decode_body(mut next: [uint,..TotalSymbols], output: &mut [Symbol], mtf: &mut MTF,
-        fn_dist: |Context<uint>|->io::IoResult<uint>) -> io::IoResult<()> {
+        fn_dist: |Context|->io::IoResult<uint>) -> io::IoResult<()> {
 
     let n = output.len();
     let mut i = 0u;
@@ -163,7 +198,7 @@ pub fn decode_body(mut next: [uint,..TotalSymbols], output: &mut [Symbol], mtf: 
             output[i] = sym;
             i += 1;
         }
-        let ctx = Context::new(sym, Some(ranks[sym as uint]), n-i);
+        let ctx = Context::new(sym, ranks[sym as uint], n-i);
         let future = match fn_dist(ctx) {
             Ok(d) => stop + d,
             Err(e) => return Err(e)
@@ -193,7 +228,7 @@ pub fn decode_body(mut next: [uint,..TotalSymbols], output: &mut [Symbol], mtf: 
 
 /// Decode a block of distances with a list of initial symbols
 pub fn decode(alphabet: Option<&[Symbol]>, output: &mut [Symbol], mtf: &mut MTF,
-    fn_dist: |Context<uint>|->io::IoResult<uint>) -> io::IoResult<()> {
+    fn_dist: |Context|->io::IoResult<uint>) -> io::IoResult<()> {
 
     let n = output.len();
     let mut next = [n, ..TotalSymbols];
@@ -201,7 +236,7 @@ pub fn decode(alphabet: Option<&[Symbol]>, output: &mut [Symbol], mtf: &mut MTF,
         Some(list) => {
             // given fixed alphabet
             for &sym in list.iter() {
-                let ctx = Context::new(sym, None, n);
+                let ctx = Context::new(sym, 0, n);
                 // initial distances are not ordered
                 next[sym as uint] = match fn_dist(ctx) {
                     Ok(d) => d, // + (rank as Distance)
@@ -212,7 +247,7 @@ pub fn decode(alphabet: Option<&[Symbol]>, output: &mut [Symbol], mtf: &mut MTF,
         None => {
             // alphabet is large, total range of symbols is assumed
             for i in range(0, TotalSymbols) {
-                let ctx = Context::new(i as Symbol, None, n);
+                let ctx = Context::new(i as Symbol, 9, n);
                 next[i] = match fn_dist(ctx) {
                     Ok(d) => d,
                     Err(e) => return Err(e)
