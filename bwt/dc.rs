@@ -65,18 +65,19 @@ pub struct EncodeIterator<'a,'b,D> {
 }
 
 impl<'a, 'b, D: NumCast> EncodeIterator<'a,'b,D> {
-    /// fixme
-    pub fn new(input: &'a [Symbol], dist: &'b [D], next: &[D, ..TotalSymbols]) -> EncodeIterator<'a,'b,D> {
+    /// create a new encode iterator
+    pub fn new(input: &'a [Symbol], dist: &'b [D], init: [uint, ..TotalSymbols]) -> EncodeIterator<'a,'b,D> {
         assert_eq!(input.len(), dist.len());
-        let mut pos = [0u, ..TotalSymbols];
-        for (pi,ni) in pos.mut_iter().zip(next.iter()) {
-            *pi = ni.to_uint().unwrap();
-        }
         EncodeIterator {
             data: input.iter().zip(dist.iter()).enumerate(),
-            pos: pos,
+            pos: init,
             size: input.len()
         }
+    }
+
+    /// get the initial symbol positions, to be called before iteration
+    pub fn get_init<'c>(&'c self) -> &'c [uint, ..TotalSymbols] {
+        &self.pos
     }
 }
 
@@ -85,7 +86,7 @@ impl<'a, 'b, D: Clone + Eq + NumCast> Iterator<(D,Context)> for EncodeIterator<'
         let filler: D = NumCast::from(self.size).unwrap();
         self.data.find(|&(_,(_,d))| *d != filler).map(|(i,(sym,d))| {
             let rank = i - self.pos[*sym as uint];
-            assert!(0<rank && rank<TotalSymbols);
+            assert!(rank < TotalSymbols);
             self.pos[*sym as uint] = i + d.to_uint().unwrap();
             (d.clone(), Context::new(*sym, rank as Rank, self.size-i))
         })
@@ -96,11 +97,12 @@ impl<'a, 'b, D: Clone + Eq + NumCast> Iterator<(D,Context)> for EncodeIterator<'
 /// write output distance stream into 'distances'
 /// return: unique bytes encountered in the order they appear
 /// with the corresponding initial distances
-pub fn encode<'a, 'b, D: Clone + Eq + NumCast>(input: &'a [Symbol], distances: &'b mut [D], mtf: &mut MTF) -> ~[(Symbol,D)] {
+pub fn encode<'a, 'b, D: Clone + Copy + Eq + NumCast>(input: &'a [Symbol], distances: &'b mut [D], mtf: &mut MTF) -> EncodeIterator<'a,'b,D> {
     let n = input.len();
     assert_eq!(distances.len(), n);
+    let mut num_unique = 0u;
     let mut last = [n, ..TotalSymbols];
-    let mut unique: ~[(Symbol,D)] = vec::with_capacity(TotalSymbols);
+    let mut init = [n, ..TotalSymbols];
     let filler: D = NumCast::from(n).unwrap();
     for (i,&sym) in input.iter().enumerate() {
         distances[i] = filler.clone();
@@ -108,13 +110,13 @@ pub fn encode<'a, 'b, D: Clone + Eq + NumCast>(input: &'a [Symbol], distances: &
         last[sym as uint] = i;
         debug!("\tProcessing symbol {} at position {}, last known at {}", sym, i, base);
         if base == n {
-            let rank = unique.len();
+            let rank = num_unique;
             mtf.symbols[rank] = sym;
             mtf.encode(sym);    //==rank
             // initial distances are not ordered to support re-shuffle
             debug!("\t\tUnique => assigning rank {}, encoding {}", rank, i);
-            let d = NumCast::from(i).unwrap();
-            unique.push((sym,d));
+            init[sym as uint] = i;
+            num_unique += 1;
         }else {
             let rank = mtf.encode(sym) as uint;
             if rank > 0 {
@@ -124,38 +126,30 @@ pub fn encode<'a, 'b, D: Clone + Eq + NumCast>(input: &'a [Symbol], distances: &
             }
         }
     }
-    for (rank,&sym) in mtf.symbols.slice_to(unique.len()).iter().enumerate() {
+    for (rank,&sym) in mtf.symbols.slice_to(num_unique).iter().enumerate() {
         let base = last[sym as uint];
         debug!("\tSweep symbol {} of rank {}, last known at {}, encoding {}", sym, rank, base, n-base-rank-1);
         assert!(n >= base+rank+1);
         distances[base] = NumCast::from(n-base-rank-1).unwrap();
     }
-    assert_eq!(input.iter().zip(input.iter().skip(1)).zip(distances.iter()).
-        position(|((&a,&b),d)| *d==filler && a!=b), None);
-    unique
+    // a basic but expensive check, to be improved
+    //assert_eq!(input.iter().zip(input.iter().skip(1)).zip(distances.iter()).
+    //    position(|((&a,&b),d)| *d==filler && a!=b), None);
+    EncodeIterator::new(input, distances, init)
 }
 
 
 /// encode with "batteries included" for quick testing
-pub fn encode_simple<D: Clone + Eq + NumCast>(input: &[Symbol]) -> (~[Symbol],~[D]) {
+pub fn encode_simple<D: Clone + Copy + Eq + NumCast>(input: &[Symbol]) -> ~[D] {
     let n = input.len();
-    if n==0 {
-        (~[],~[])
-    }else   {
-        let mut raw_dist: ~[D] = vec::from_elem(n, NumCast::from(0).unwrap());
-        let pairs = encode(input, raw_dist, &mut MTF::new());
-        let mut symbols = pairs.iter().map(|&(sym,_)| sym);
-        let init_iter = pairs.iter().map(|pair| { let (_, ref d) = *pair; d.clone() });
-        let filler: D = NumCast::from(n).unwrap();
-        // chain initial distances with intermediate ones
-        let raw_iter = raw_dist.iter().filter_map(|d| if *d!=filler {Some(d.clone())} else {None});
-        let mut combined = init_iter.chain(raw_iter);
-        (symbols.collect(), combined.collect())
-    }
+    let mut raw_dist: ~[D] = vec::from_elem(n, NumCast::from(0).unwrap());
+    let mut eniter = encode(input, raw_dist, &mut MTF::new());
+    let init: ~[D] = vec::from_fn(TotalSymbols, |i| NumCast::from(eniter.get_init()[i]).unwrap());
+    init.iter().map(|d| d.clone()).chain(eniter.by_ref().map(|(d,_)| d)).collect()
 }
 
-/// Decode a block of distances given initial symbol distances
-pub fn decode_body(mut next: [uint,..TotalSymbols], output: &mut [Symbol], mtf: &mut MTF,
+/// Decode a block of distances given the initial symbol positions
+pub fn decode(mut next: [uint,..TotalSymbols], output: &mut [Symbol], mtf: &mut MTF,
         fn_dist: |Context|->io::IoResult<uint>) -> io::IoResult<()> {
 
     let n = output.len();
@@ -226,44 +220,15 @@ pub fn decode_body(mut next: [uint,..TotalSymbols], output: &mut [Symbol], mtf: 
     Ok(())
 }
 
-/// Decode a block of distances with a list of initial symbols
-pub fn decode(alphabet: Option<&[Symbol]>, output: &mut [Symbol], mtf: &mut MTF,
-    fn_dist: |Context|->io::IoResult<uint>) -> io::IoResult<()> {
-
-    let n = output.len();
-    let mut next = [n, ..TotalSymbols];
-    match alphabet {
-        Some(list) => {
-            // given fixed alphabet
-            for &sym in list.iter() {
-                let ctx = Context::new(sym, 0, n);
-                // initial distances are not ordered
-                next[sym as uint] = match fn_dist(ctx) {
-                    Ok(d) => d, // + (rank as Distance)
-                    Err(e) => return Err(e)
-                };
-            }
-        },
-        None => {
-            // alphabet is large, total range of symbols is assumed
-            for i in range(0, TotalSymbols) {
-                let ctx = Context::new(i as Symbol, 9, n);
-                next[i] = match fn_dist(ctx) {
-                    Ok(d) => d,
-                    Err(e) => return Err(e)
-                };
-            }
-        },
-    }
-
-    decode_body(next, output, mtf, fn_dist)
-}
-
 /// decode with "batteries included" for quick testing
-pub fn decode_simple<D: ToPrimitive>(n: uint, alphabet: &[Symbol], distances: &[D]) -> ~[Symbol] {
+pub fn decode_simple<D: ToPrimitive>(n: uint, distances: &[D]) -> ~[Symbol] {
     let mut output = vec::from_elem(n, 0 as Symbol);
-    let mut di = 0u;
-    decode(Some(alphabet), output.as_mut_slice(), &mut MTF::new(), |_ctx| {
+    let mut init = [0u, ..TotalSymbols];
+    for i in range(0, TotalSymbols) {
+        init[i] = distances[i].to_uint().unwrap();
+    }
+    let mut di = TotalSymbols;
+    decode(init, output.as_mut_slice(), &mut MTF::new(), |_ctx| {
         di += 1;
         if di > distances.len() {
             Err(io::standard_error(io::EndOfFile))
@@ -277,50 +242,18 @@ pub fn decode_simple<D: ToPrimitive>(n: uint, alphabet: &[Symbol], distances: &[
 
 #[cfg(test)]
 mod test {
-    use std;
-
     fn roundtrip(bytes: &[u8]) {
         info!("Roundtrip DC of size {}", bytes.len());
-        let (alphabet,distances) = super::encode_simple::<uint>(bytes);
-        debug!("Roundtrip DC input: {:?}, alphabet: {:?}, distances: {:?}", bytes, alphabet, distances);
-        let decoded = super::decode_simple(bytes.len(), alphabet.as_slice(), distances.as_slice());
-        assert_eq!(decoded.as_slice(), bytes);
-    }
-
-    fn roundtrip_full_alphabet(bytes: &[u8]) {
-        let n = bytes.len();
-        info!("Roundtrip DC (full alphabet) of size {}", n);
-        let mut mtf = super::MTF::new();
-        // encoding with full alphabet
-        let mut raw_dist = std::slice::from_elem(n, 0u);
-        let pairs = super::encode(bytes, raw_dist, &mut mtf);
-        let mut alphabet = std::slice::from_elem(0x100, n);
-        for &(sym,dist) in pairs.iter() {
-            alphabet[sym as uint] = dist;
-        }
-        let raw_iter = raw_dist.iter().filter(|&d| *d!=n);
-        let distances: ~[&uint] = alphabet.iter().chain(raw_iter).collect();
-        // decoding with full alphabet
-        let mut decoded = std::slice::from_elem(n, 0 as super::Symbol);
-        let mut di = 0u;
-        super::decode(None, decoded.as_mut_slice(), &mut mtf, |_sym| {
-            di += 1;
-            Ok(distances[di-1].to_uint().unwrap())
-        }).unwrap();
-        // comparing with input
+        let distances = super::encode_simple::<uint>(bytes);
+        debug!("Roundtrip DC input: {:?}, distances: {:?}", bytes, distances);
+        let decoded = super::decode_simple(bytes.len(), distances.as_slice());
         assert_eq!(decoded.as_slice(), bytes);
     }
 
     #[test]
-    fn roundtrips_short() {
+    fn roundtrips() {
         roundtrip(bytes!("teeesst_dc"));
         roundtrip(bytes!(""));
         roundtrip(include_bin!("../data/test.txt"));
-    }
-
-    #[test]
-    fn roundtrips_long() {
-        let input: ~[u8] = std::iter::range_inclusive(0u8, 0xFFu8).collect();
-        roundtrip_full_alphabet(input);
     }
 }
