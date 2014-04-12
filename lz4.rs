@@ -25,13 +25,14 @@ can be found at https://github.com/bkaradzic/go-lz4.
 
 use std::io;
 use std::cmp;
-use vec = std::slice;
+use std::slice;
+use std::vec::Vec;
 
 static MAGIC: u32 = 0x184d2204;
 
 struct BlockDecoder<'a> {
     input: &'a [u8],
-    output: &'a mut ~[u8],
+    output: &'a mut Vec<u8>,
     cur: uint,
 
     start: uint,
@@ -50,7 +51,7 @@ impl<'a> BlockDecoder<'a> {
                 let len = self.length(code >> 4);
                 debug!("consume len {}", len);
                 self.grow_output(self.end + len);
-                vec::bytes::copy_memory(self.output.mut_slice_from(self.end),
+                slice::bytes::copy_memory(self.output.mut_slice_from(self.end),
                                         self.input.slice(self.cur, self.cur + len));
                 self.end += len;
                 self.cur += len;
@@ -102,7 +103,7 @@ impl<'a> BlockDecoder<'a> {
     fn cp(&mut self, len: uint, decr: uint) {
         self.grow_output(self.end + len);
         for i in range(0, len) {
-            self.output[self.end + i] = self.output[self.start + i];
+            *self.output.get_mut(self.end + i) = *self.output.get(self.start + i);
         }
 
         self.end += len;
@@ -135,8 +136,8 @@ pub struct Decoder<R> {
     /// progress the output stream will get corrupted.
     pub r: R,
 
-    temp: ~[u8],
-    output: ~[u8],
+    temp: Vec<u8>,
+    output: Vec<u8>,
 
     start: uint,
     end: uint,
@@ -155,8 +156,8 @@ impl<R: Reader> Decoder<R> {
     pub fn new(r: R) -> Decoder<R> {
         Decoder {
             r: r,
-            temp: ~[],
-            output: ~[],
+            temp: Vec::new(),
+            output: Vec::new(),
             header: false,
             blk_checksum: false,
             stream_checksum: false,
@@ -302,7 +303,7 @@ impl<R: Reader> Reader for Decoder<R> {
                 }
             }
             let n = cmp::min(amt, self.end - self.start);
-            vec::bytes::copy_memory(dst.mut_slice_from(len - amt),
+            slice::bytes::copy_memory(dst.mut_slice_from(len - amt),
                                     self.output.slice(self.start, self.start + n));
             self.start += n;
             amt -= n;
@@ -317,8 +318,8 @@ impl<R: Reader> Reader for Decoder<R> {
 /// bytes will be written to.
 pub struct Encoder<W> {
     w: W,
-    buf: ~[u8],
-    tmp: ~[u8],
+    buf: Vec<u8>,
+    tmp: Vec<u8>,
     wrote_header: bool,
     limit: uint,
 }
@@ -334,8 +335,8 @@ impl<W: Writer> Encoder<W> {
         Encoder {
             w: w,
             wrote_header: false,
-            buf: vec::with_capacity(1024),
-            tmp: ~[],
+            buf: Vec::with_capacity(1024),
+            tmp: Vec::new(),
             limit: 256 * 1024,
         }
     }
@@ -344,10 +345,10 @@ impl<W: Writer> Encoder<W> {
         self.tmp.truncate(0);
         if self.compress() {
             try!(self.w.write_le_u32(self.tmp.len() as u32));
-            try!(self.w.write(self.tmp))
+            try!(self.w.write(self.tmp.as_slice()))
         } else {
             try!(self.w.write_le_u32((self.buf.len() as u32) | 0x80000000));
-            try!(self.w.write(self.buf))
+            try!(self.w.write(self.buf.as_slice()))
         }
         self.buf.truncate(0);
         Ok(())
@@ -471,7 +472,7 @@ mod test {
         err.unwrap();
         let encoded = e.unwrap();
 
-        let mut d = Decoder::new(BufReader::new(encoded));
+        let mut d = Decoder::new(BufReader::new(encoded.as_slice()));
         let decoded = d.read_to_end().unwrap();
         assert_eq!(decoded.as_slice(), bytes);
     }

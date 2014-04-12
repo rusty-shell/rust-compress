@@ -24,7 +24,8 @@
 
 use std::cmp;
 use std::io;
-use vec = std::slice;
+use std::slice;
+use std::vec::Vec;
 
 static MAXBITS: uint = 15;
 static MAXLCODES: u16 = 286;
@@ -159,10 +160,10 @@ pub struct Decoder<R> {
     /// Wrapped reader which is exposed to allow getting it back.
     pub r: R,
 
-    output: ~[u8],
+    output: Vec<u8>,
     outpos: uint,
 
-    block: ~[u8],
+    block: Vec<u8>,
     pos: uint,
 
     bitbuf: uint,
@@ -176,9 +177,9 @@ impl<R: Reader> Decoder<R> {
     pub fn new(r: R) -> Decoder<R> {
         Decoder {
             r: r,
-            output: vec::with_capacity(HISTORY),
+            output: Vec::with_capacity(HISTORY),
             outpos: 0,
-            block: ~[],
+            block: Vec::new(),
             pos: 0,
             bitbuf: 0,
             bitcnt: 0,
@@ -188,7 +189,7 @@ impl<R: Reader> Decoder<R> {
 
     fn block(&mut self) -> io::IoResult<()> {
         self.pos = 0;
-        self.block = vec::with_capacity(4096);
+        self.block = Vec::with_capacity(4096);
         if try!(self.bits(1)) == 1 { self.eof = true; }
         match try!(self.bits(2)) {
             0 => self.statik(),
@@ -211,12 +212,12 @@ impl<R: Reader> Decoder<R> {
             self.output.push_all(self.block.slice(from, from + n));
         } else {
             assert_eq!(self.output.len(), HISTORY);
-            vec::bytes::copy_memory(self.output.mut_slice_from(self.outpos),
+            slice::bytes::copy_memory(self.output.mut_slice_from(self.outpos),
                                     self.block.slice(from, from + n));
         }
         self.outpos += n;
         if n < amt {
-            vec::bytes::copy_memory(self.output,
+            slice::bytes::copy_memory(self.output.as_mut_slice(),
                                     self.block.slice_from(from + n));
             self.outpos = amt - n;
         }
@@ -313,11 +314,12 @@ impl<R: Reader> Decoder<R> {
                     let min = cmp::min(dist, len);
                     let start = self.block.len();
                     for _ in range(0, min) {
-                        self.block.push(self.output[finger]);
+                        self.block.push(*self.output.get(finger));
                         finger = (finger + 1) % HISTORY;
                     }
                     for i in range(min, len) {
-                        self.block.push(self.block[start + i - min]);
+                        let b = *self.block.get(start + i - min);
+                        self.block.push(b);
                     }
                 }
                 _ => return error(InvalidHuffmanCode)
@@ -447,7 +449,7 @@ impl<R: Reader> Decoder<R> {
         self.bitbuf = 0;
         self.bitcnt = 0;
         self.eof = false;
-        self.block = ~[];
+        self.block = Vec::new();
         self.pos = 0;
     }
 }
@@ -459,7 +461,7 @@ impl<R: Reader> Reader for Decoder<R> {
             try!(self.block());
         }
         let n = cmp::min(buf.len(), self.block.len() - self.pos);
-        vec::bytes::copy_memory(buf.mut_slice_to(n),
+        slice::bytes::copy_memory(buf.mut_slice_to(n),
                                 self.block.slice(self.pos, self.pos + n));
         self.pos += n;
         Ok(n)

@@ -21,7 +21,7 @@ e.write(bytes).unwrap();
 let encoded = e.finish().unwrap();
 
 // Decode a stream of ranks
-let mut d = mtf::Decoder::new(io::BufReader::new(encoded));
+let mut d = mtf::Decoder::new(io::BufReader::new(encoded.as_slice()));
 let decoded = d.read_to_end().unwrap();
 ```
 
@@ -179,7 +179,7 @@ mod test {
         e.write(bytes).unwrap();
         let encoded = e.finish().unwrap();
         debug!("Roundtrip MTF input: {:?}, ranks: {:?}", bytes, encoded);
-        let mut d = Decoder::new(io::BufReader::new(encoded));
+        let mut d = Decoder::new(io::BufReader::new(encoded.as_slice()));
         let decoded = d.read_to_end().unwrap();
         assert_eq!(decoded.as_slice(), bytes);
     }
@@ -209,7 +209,7 @@ mod test {
         e.write(input).unwrap();
         let encoded = e.finish().unwrap();
         bh.iter(|| {
-            let mut d = Decoder::new(io::BufReader::new(encoded));
+            let mut d = Decoder::new(io::BufReader::new(encoded.as_slice()));
             d.read_to_end().unwrap();
         });
         bh.bytes = input.len() as u64;

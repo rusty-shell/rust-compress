@@ -33,7 +33,7 @@ This is an original implementation.
 */
 
 use std::io;
-use vec = std::slice;
+use std::vec::Vec;
 #[cfg(tune)]
 use std::num;
 
@@ -170,7 +170,7 @@ pub static range_default_threshold: Border = 1<<14;
 
 /// Encode 'value', using a model and a range encoder
 /// returns a list of output bytes
-pub fn encode<M: Model>(value: Value, model: &M, re: &mut RangeEncoder, accum: &mut ~[Symbol]) {
+pub fn encode<M: Model>(value: Value, model: &M, re: &mut RangeEncoder, accum: &mut Vec<Symbol>) {
     let (lo, hi) = model.get_range(value);
     let total = model.get_denominator();
     debug!("\tEncoding value {} of range [{}-{}) with total {}", value, lo, hi, total);
@@ -194,7 +194,7 @@ pub fn decode<M: Model>(code: Border, model: &M, re: &mut RangeEncoder) -> (Valu
 pub struct Encoder<W> {
     stream: W,
     range: RangeEncoder,
-    buffer: ~[Symbol],
+    buffer: Vec<Symbol>,
     bytes_written: uint,
 }
 
@@ -204,7 +204,7 @@ impl<W: Writer> Encoder<W> {
         Encoder {
             stream: w,
             range: RangeEncoder::new(range_default_threshold),
-            buffer: vec::with_capacity(4),
+            buffer: Vec::with_capacity(4),
             bytes_written: 0,
         }
     }
@@ -214,7 +214,7 @@ impl<W: Writer> Encoder<W> {
         self.buffer.truncate(0);
         encode(value, model, &mut self.range, &mut self.buffer);
         self.bytes_written += self.buffer.len();
-        self.stream.write(self.buffer)
+        self.stream.write(self.buffer.as_slice())
     }
 
     /// Finish decoding by writing the code tail word
@@ -453,7 +453,7 @@ pub struct FrequencyTable {
     /// sum of frequencies
     total: Border,
     /// main table: value -> Frequency
-    table: ~[Frequency],
+    table: Vec<Frequency>,
     /// maximum allowed sum of frequency,
     /// should be smaller than RangeEncoder::threshold
     cut_threshold: Border,
@@ -464,7 +464,7 @@ pub struct FrequencyTable {
 impl FrequencyTable {
     /// Create a new table with frequencies initialized by a function
     pub fn new_custom(num_values: uint, threshold: Border, fn_init: |Value|-> Frequency) -> FrequencyTable {
-        let freq = vec::from_fn(num_values, fn_init);
+        let freq = Vec::from_fn(num_values, fn_init);
         let total = freq.iter().fold(0 as Border, |u,&f| u+(f as Border));
         let mut ft = FrequencyTable {
             total: total,
@@ -499,7 +499,7 @@ impl FrequencyTable {
         let add = (self.total>>add_log) + add_const;
         assert!(add < 2*self.cut_threshold);
         debug!("\tUpdating by adding {} to value {}", add, value);
-        self.table[value] += add as Frequency;
+        *self.table.get_mut(value) += add as Frequency;
         self.total += add;
         if self.total >= self.cut_threshold {
             self.downscale();
@@ -528,7 +528,7 @@ impl FrequencyTable {
 impl Model for FrequencyTable {
     fn get_range(&self, value: Value) -> (Border,Border) {
         let lo = self.table.slice_to(value).iter().fold(0, |u,&f| u+(f as Border));
-        (lo, lo + (self.table[value] as Border))
+        (lo, lo + (*self.table.get(value) as Border))
     }
 
     fn find_value(&self, offset: Border) -> (Value,Border,Border) {
@@ -538,7 +538,7 @@ impl Model for FrequencyTable {
         let mut value = 0u;
         let mut lo = 0 as Border;
         let mut hi;
-        while {hi=lo+(self.table[value] as Border); hi} <= offset {
+        while {hi=lo+(*self.table.get(value) as Border); hi} <= offset {
             lo = hi;
             value += 1;
         }
@@ -702,7 +702,7 @@ impl<R: Reader> Reader for ByteDecoder<R> {
 #[cfg(test)]
 mod test {
     use std::io::{BufReader, BufWriter, MemWriter, SeekSet};
-    use vec = std::slice;
+    use std::vec::Vec;
     use test;
 
     fn roundtrip(bytes: &[u8]) {
@@ -713,12 +713,12 @@ mod test {
         r.unwrap();
         let encoded = e.unwrap();
         debug!("Roundtrip input {:?} encoded {:?}", bytes, encoded);
-        let mut d = super::ByteDecoder::new(BufReader::new(encoded));
+        let mut d = super::ByteDecoder::new(BufReader::new(encoded.as_slice()));
         let decoded = d.read_to_end().unwrap();
         assert_eq!(bytes.as_slice(), decoded.as_slice());
     }
 
-    fn encode_binary(bytes: &[u8], model: &mut super::BinaryModel, factor: uint) -> ~[u8] {
+    fn encode_binary(bytes: &[u8], model: &mut super::BinaryModel, factor: uint) -> Vec<u8> {
         let mut encoder = super::Encoder::new(MemWriter::new());
         for &byte in bytes.iter() {
             for i in range(0,8) {
@@ -736,7 +736,7 @@ mod test {
         let mut bm = super::BinaryModel::new_flat(super::range_default_threshold >> 3);
         let output = encode_binary(bytes, &mut bm, factor);
         bm.reset_flat();
-        let mut decoder = super::Decoder::new(BufReader::new(output));
+        let mut decoder = super::Decoder::new(BufReader::new(output.as_slice()));
         decoder.start().unwrap();
         for &byte in bytes.iter() {
             let mut value = 0u8;
@@ -788,7 +788,7 @@ mod test {
         t1.reset_flat();
         b0.reset_flat();
         b1.reset_flat();
-        let mut decoder = super::Decoder::new(BufReader::new(buffer));
+        let mut decoder = super::Decoder::new(BufReader::new(buffer.as_slice()));
         decoder.start().unwrap();
         for &byte in bytes.iter() {
             let high = {
@@ -833,9 +833,9 @@ mod test {
     #[bench]
     fn compress_speed(bh: &mut test::BenchHarness) {
         let input = include_bin!("../data/test.txt");
-        let mut storage = vec::from_elem(input.len(), 0u8);
+        let mut storage = Vec::from_elem(input.len(), 0u8);
         bh.iter(|| {
-            let mut w = BufWriter::new(storage);
+            let mut w = BufWriter::new(storage.as_mut_slice());
             w.seek(0, SeekSet).unwrap();
             let mut e = super::ByteEncoder::new(w);
             e.write(input).unwrap();

@@ -261,7 +261,7 @@ mod test {
     fn roundtrip_ctx(bytes: &[u8]) {
         let n = bytes.len();
         info!("Roundtrip DC context of size {}", n);
-        let mut mtf = super::MTF::new();
+        let mut mtf = super::super::mtf::MTF::new();
         let mut raw_dist = vec::from_elem(n, 0u16);
         let eniter = super::encode(bytes, raw_dist, &mut mtf);
         let mut init = [0u, ..super::TotalSymbols];

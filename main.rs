@@ -58,8 +58,8 @@ impl Config {
 }
 
 struct Pass {
-    encode: 'static |~Writer,&Config| -> ~io::Writer,
-    decode: 'static |~Reader,&Config| -> ~io::Reader,
+    encode: |~Writer,&Config|:'static -> ~io::Writer,
+    decode: |~Reader,&Config|:'static -> ~io::Reader,
     info: ~str,
 }
 
@@ -139,7 +139,7 @@ pub fn main() {
         let methods = vec::from_fn( input.read_u8().unwrap() as uint, |_| {
             let len = input.read_u8().unwrap() as uint;
             let bytes = input.read_exact(len).unwrap();
-            str::from_utf8(bytes).unwrap().to_owned()
+            str::from_utf8(bytes.as_slice()).unwrap().to_owned()
         });
         let mut rsum: ~Reader = ~input;
         for met in methods.iter() {
