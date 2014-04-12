@@ -37,11 +37,11 @@ pub static TotalSymbols: uint = 0x100;
 #[deriving(Eq, Show)]
 pub struct Context {
     /// current symbol
-    symbol: Symbol,
+    pub symbol: Symbol,
     /// last known MTF rank
-    last_rank: Rank,
+    pub last_rank: Rank,
     /// maximum possible distance
-    distance_limit: uint,
+    pub distance_limit: uint,
 }
 
 impl Context {
