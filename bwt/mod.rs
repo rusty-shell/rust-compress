@@ -510,8 +510,8 @@ impl<W: Writer> Writer for Encoder<W> {
 
 #[cfg(test)]
 mod test {
-    use test;
     use std::io::{BufReader, MemWriter};
+    use test::Bencher;
     use super::{encode, decode, Decoder, Encoder};
 
     fn roundtrip(bytes: &[u8], extra_mem: bool) {
@@ -539,7 +539,7 @@ mod test {
     }
 
     #[bench]
-    fn decode_speed(bh: &mut test::BenchHarness) {
+    fn decode_speed(bh: &mut Bencher) {
         let input = include_bin!("../data/test.txt");
         let n = input.len();
         let mut suf = Vec::from_elem(n, 0u16);

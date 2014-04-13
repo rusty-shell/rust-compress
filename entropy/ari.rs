@@ -703,7 +703,7 @@ impl<R: Reader> Reader for ByteDecoder<R> {
 mod test {
     use std::io::{BufReader, BufWriter, MemWriter, SeekSet};
     use std::vec::Vec;
-    use test;
+    use test::Bencher;
 
     fn roundtrip(bytes: &[u8]) {
         info!("Roundtrip Ari of size {}", bytes.len());
@@ -831,7 +831,7 @@ mod test {
     }
 
     #[bench]
-    fn compress_speed(bh: &mut test::BenchHarness) {
+    fn compress_speed(bh: &mut Bencher) {
         let input = include_bin!("../data/test.txt");
         let mut storage = Vec::from_elem(input.len(), 0u8);
         bh.iter(|| {

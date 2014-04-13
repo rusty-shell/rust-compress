@@ -485,7 +485,7 @@ mod test {
     }
 
     #[bench]
-    fn decompress_speed(bh: &mut test::BenchHarness) {
+    fn decompress_speed(bh: &mut test::Bencher) {
         let input = include_bin!("data/test.lz4.9");
         let mut d = Decoder::new(BufReader::new(input));
         let mut output = [0u8, ..65536];

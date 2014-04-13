@@ -169,8 +169,8 @@ impl<R: Reader> Reader for Decoder<R> {
 
 #[cfg(test)]
 mod test {
-    use test;
     use std::io;
+    use test::Bencher;
     use super::{Encoder, Decoder};
 
     fn roundtrip(bytes: &[u8]) {
@@ -192,7 +192,7 @@ mod test {
     }
 
     #[bench]
-    fn encode_speed(bh: &mut test::BenchHarness) {
+    fn encode_speed(bh: &mut Bencher) {
         let input = include_bin!("../data/test.txt");
         let mem = io::MemWriter::with_capacity(input.len());
         let mut e = Encoder::new(mem);
@@ -203,7 +203,7 @@ mod test {
     }
 
     #[bench]
-    fn decode_speed(bh: &mut test::BenchHarness) {
+    fn decode_speed(bh: &mut Bencher) {
         let input = include_bin!("../data/test.txt");
         let mut e = Encoder::new(io::MemWriter::new());
         e.write(input).unwrap();
