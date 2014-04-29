@@ -147,9 +147,9 @@ pub fn encode<'a, 'b, D: Clone + Copy + Eq + NumCast>(input: &'a [Symbol], dista
 /// Encode version with "batteries included" for quick testing
 pub fn encode_simple<D: Clone + Copy + Eq + NumCast>(input: &[Symbol]) -> ~[D] {
     let n = input.len();
-    let mut raw_dist: ~[D] = vec::from_elem(n, NumCast::from(0).unwrap());
-    let mut eniter = encode(input, raw_dist, &mut MTF::new());
-    let init: ~[D] = vec::from_fn(TotalSymbols, |i| NumCast::from(eniter.get_init()[i]).unwrap());
+    let mut raw_dist: Vec<D> = Vec::from_elem(n, NumCast::from(0).unwrap());
+    let mut eniter = encode(input, raw_dist.as_mut_slice(), &mut MTF::new());
+    let init: Vec<D> = Vec::from_fn(TotalSymbols, |i| NumCast::from(eniter.get_init()[i]).unwrap());
     init.iter().map(|d| d.clone()).chain(eniter.by_ref().map(|(d,_)| d)).collect()
 }
 
@@ -227,7 +227,7 @@ pub fn decode(mut next: [uint,..TotalSymbols], output: &mut [Symbol], mtf: &mut 
 
 /// Decode version with "batteries included" for quick testing
 pub fn decode_simple<D: ToPrimitive>(n: uint, distances: &[D]) -> ~[Symbol] {
-    let mut output = vec::from_elem(n, 0 as Symbol);
+    let mut output = Vec::from_elem(n, 0 as Symbol);
     let mut init = [0u, ..TotalSymbols];
     for i in range(0, TotalSymbols) {
         init[i] = distances[i].to_uint().unwrap();
@@ -241,14 +241,12 @@ pub fn decode_simple<D: ToPrimitive>(n: uint, distances: &[D]) -> ~[Symbol] {
             Ok(distances[di-1].to_uint().unwrap())
         }
     }).unwrap();
-    output
+    output.move_iter().collect()
 }
 
 
 #[cfg(test)]
 mod test {
-    use vec = std::slice;
-
     fn roundtrip(bytes: &[u8]) {
         info!("Roundtrip DC of size {}", bytes.len());
         let distances = super::encode_simple::<uint>(bytes);
@@ -262,8 +260,8 @@ mod test {
         let n = bytes.len();
         info!("Roundtrip DC context of size {}", n);
         let mut mtf = super::super::mtf::MTF::new();
-        let mut raw_dist = vec::from_elem(n, 0u16);
-        let eniter = super::encode(bytes, raw_dist, &mut mtf);
+        let mut raw_dist = Vec::from_elem(n, 0u16);
+        let eniter = super::encode(bytes, raw_dist.as_mut_slice(), &mut mtf);
         let mut init = [0u, ..super::TotalSymbols];
         for i in range(0u, super::TotalSymbols) {
             init[i] = eniter.get_init()[i];
@@ -271,7 +269,7 @@ mod test {
         // implicit iterator copies, or we can gather in one pass and then split
         let contexts: ~[super::Context] = eniter.map(|(_,ctx)| ctx).collect();
         let distances: ~[u16] = eniter.map(|(d,_)| d).collect();
-        let mut output = vec::from_elem(n, 0u8);
+        let mut output = Vec::from_elem(n, 0u8);
         let mut di = 0u;
         super::decode(init, output.as_mut_slice(), &mut mtf, |ctx| {
             assert_eq!(contexts[di], ctx);

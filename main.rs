@@ -15,7 +15,6 @@ extern crate collections;
 
 use collections::HashMap;
 use std::{io, os, str};
-use vec = std::slice;
 use compress::{bwt, lz4};
 //use compress::entropy::ari;
 
@@ -24,7 +23,7 @@ static MAGIC    : u32   = 0x73632172;   //=r!cs
 
 struct Config {
     exe_name: ~str,
-    methods: ~[~str],
+    methods: Vec<~str>,
     block_size: uint,
     decompress: bool,
 }
@@ -33,7 +32,7 @@ impl Config {
     fn query(args: &[~str]) -> Config {
         let mut cfg = Config {
             exe_name: args[0].clone(),
-            methods: ~[],
+            methods: Vec::new(),
             block_size: 1<<16,
             decompress: false,
         };
@@ -45,7 +44,7 @@ impl Config {
 
         for arg in args.iter().skip(1) {
             if arg.starts_with(&"-") {
-                match handlers.iter().find(|&(&k,_)| arg.slice_from(1).starts_with(k)) {
+                match handlers.mut_iter().find(|&(&k,_)| arg.slice_from(1).starts_with(k)) {
                     Some((k,h)) => (*h)(arg.slice_from(1+k.len()), &mut cfg),
                     None => println!("Warning: unrecognized option: {}", *arg),
                 }
@@ -136,7 +135,7 @@ pub fn main() {
             },
             _ => () //OK
         }
-        let methods = vec::from_fn( input.read_u8().unwrap() as uint, |_| {
+        let methods = Vec::from_fn( input.read_u8().unwrap() as uint, |_| {
             let len = input.read_u8().unwrap() as uint;
             let bytes = input.read_exact(len).unwrap();
             str::from_utf8(bytes.as_slice()).unwrap().to_owned()
@@ -144,7 +143,7 @@ pub fn main() {
         let mut rsum: ~Reader = ~input;
         for met in methods.iter() {
             info!("Found pass {}", *met);
-            match passes.find(met) {
+            match passes.find_mut(met) {
                 Some(pa) => rsum = (pa.decode)(rsum, &config),
                 None => fail!("Pass is not implemented"),
             }
@@ -170,7 +169,7 @@ pub fn main() {
         }
         let mut wsum: ~Writer = ~output;
         for met in config.methods.iter() {
-            match passes.find(met) {
+            match passes.find_mut(met) {
                 Some(pa) => wsum = (pa.encode)(wsum, &config),
                 None => fail!("Pass {} is not implemented", *met)
             }

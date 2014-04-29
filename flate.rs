@@ -516,7 +516,7 @@ mod test {
         let input = include_bin!("data/test.z.1");
         let mut d = Decoder::new(BufReader::new(fixup(input)));
         assert!(!d.eof());
-        let mut out = ~[];
+        let mut out = Vec::new();
         loop {
             match d.read_byte() {
                 Ok(b) => out.push(b),
@@ -531,7 +531,7 @@ mod test {
     fn random_byte_lengths() {
         let input = include_bin!("data/test.z.1");
         let mut d = Decoder::new(BufReader::new(fixup(input)));
-        let mut out = ~[];
+        let mut out = Vec::new();
         let mut buf = [0u8, ..40];
         loop {
             match d.read(buf.mut_slice_to(1 + rand::random::<uint>() % 40)) {
