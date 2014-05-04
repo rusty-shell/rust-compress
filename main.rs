@@ -37,13 +37,13 @@ impl Config {
             decompress: false,
         };
         let mut handlers: HashMap<&str,|&str, &mut Config|> = HashMap::new();
-        handlers.insert(&"d",|_, cfg| { cfg.decompress = true; });
-        handlers.insert(&"block",|b, cfg| {
+        handlers.insert("d",|_, cfg| { cfg.decompress = true; });
+        handlers.insert("block",|b, cfg| {
             cfg.block_size = from_str(b).unwrap();
         });
 
         for arg in args.iter().skip(1) {
-            if arg.starts_with(&"-") {
+            if arg.starts_with("-") {
                 match handlers.mut_iter().find(|&(&k,_)| arg.slice_from(1).starts_with(k)) {
                     Some((k,h)) => (*h)(arg.slice_from(1+k.len()), &mut cfg),
                     None => println!("Warning: unrecognized option: {}", *arg),
@@ -66,10 +66,10 @@ struct Pass {
 /// main entry point
 pub fn main() {
     let mut passes: HashMap<~str,Pass> = HashMap::new();
-    passes.insert(~"dummy", Pass {
+    passes.insert("dummy".to_str(), Pass {
         encode: |w,_| w,
         decode: |r,_| r,
-        info: ~"pass-through",
+        info: "pass-through".to_str(),
     });
     /* // unclear what to do with Ari since it requires the size to be known
     passes.insert(~"ari", Pass {
@@ -81,23 +81,23 @@ pub fn main() {
         },
         info: ~"Adaptive arithmetic byte coder",
     });*/
-    passes.insert(~"bwt", Pass {
+    passes.insert("bwt".to_str(), Pass {
         encode: |w,c| {
             ~bwt::Encoder::new(w, c.block_size) as ~Writer
         },
         decode: |r,_c| {
             ~bwt::Decoder::new(r, true) as ~Reader
         },
-        info: ~"Burrows-Wheeler Transformation",
+        info: "Burrows-Wheeler Transformation".to_str(),
     });
-    passes.insert(~"mtf", Pass {
+    passes.insert("mtf".to_str(), Pass {
         encode: |w,_c| {
             ~bwt::mtf::Encoder::new(w) as ~Writer
         },
         decode: |r,_c| {
             ~bwt::mtf::Decoder::new(r) as ~Reader
         },
-        info: ~"Move-To-Front Transformation",
+        info: "Move-To-Front Transformation".to_str(),
     });
     /* // looks like we are missing the encoder implementation
     passes.insert(~"flate", Pass {
@@ -109,14 +109,14 @@ pub fn main() {
         },
         info: ~"Standardized Ziv-Lempel + Huffman variant",
     });*/
-    passes.insert(~"lz4", Pass {
+    passes.insert("lz4".to_str(), Pass {
         encode: |w,_c| {
             ~lz4::Encoder::new(w) as ~Writer
         },
         decode: |r,_c| { // LZ4 decoder seem to work
             ~lz4::Decoder::new(r) as ~Reader
         },
-        info: ~"Ziv-Lempel derivative, focused at speed",
+        info: "Ziv-Lempel derivative, focused at speed".to_str(),
     });
 
     let config = Config::query(os::args());
