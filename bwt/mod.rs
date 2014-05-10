@@ -201,10 +201,10 @@ pub fn encode<'a, SUF: NumCast + ToPrimitive>(input: &'a [Symbol], suf_array: &'
 
 /// Transform an input block into the output slice, all-inclusive version.
 /// Returns the index of the original string in the output matrix.
-pub fn encode_simple(input: &[Symbol]) -> (~[Symbol], uint) {
+pub fn encode_simple(input: &[Symbol]) -> (Vec<Symbol>, uint) {
     let mut suf_array = Vec::from_elem(input.len(), 0u);
     let mut iter = encode(input, suf_array.as_mut_slice());
-    let output: ~[Symbol] = iter.collect();
+    let output: Vec<Symbol> = iter.collect();
     (output, iter.get_origin())
 }
 
@@ -274,7 +274,7 @@ pub fn decode<'a, SUF: NumCast>(input: &'a [Symbol], origin: uint, table: &'a mu
 }
 
 /// A simplified BWT decode function, which allocates a temporary suffix array
-pub fn decode_simple(input: &[Symbol], origin: uint) -> ~[Symbol] {
+pub fn decode_simple(input: &[Symbol], origin: uint) -> Vec<Symbol> {
     let mut suf = Vec::from_elem(input.len(), 0 as uint);
     decode(input, origin, suf.as_mut_slice()).take(input.len()).collect()
 }

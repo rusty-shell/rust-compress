@@ -145,7 +145,7 @@ pub fn encode<'a, 'b, D: Clone + Copy + Eq + NumCast>(input: &'a [Symbol], dista
 
 
 /// Encode version with "batteries included" for quick testing
-pub fn encode_simple<D: Clone + Copy + Eq + NumCast>(input: &[Symbol]) -> ~[D] {
+pub fn encode_simple<D: Clone + Copy + Eq + NumCast>(input: &[Symbol]) -> Vec<D> {
     let n = input.len();
     let mut raw_dist: Vec<D> = Vec::from_elem(n, NumCast::from(0).unwrap());
     let mut eniter = encode(input, raw_dist.as_mut_slice(), &mut MTF::new());
@@ -226,7 +226,7 @@ pub fn decode(mut next: [uint,..TotalSymbols], output: &mut [Symbol], mtf: &mut 
 }
 
 /// Decode version with "batteries included" for quick testing
-pub fn decode_simple<D: ToPrimitive>(n: uint, distances: &[D]) -> ~[Symbol] {
+pub fn decode_simple<D: ToPrimitive>(n: uint, distances: &[D]) -> Vec<Symbol> {
     let mut output = Vec::from_elem(n, 0 as Symbol);
     let mut init = [0u, ..TotalSymbols];
     for i in range(0, TotalSymbols) {
@@ -267,14 +267,14 @@ mod test {
             init[i] = eniter.get_init()[i];
         }
         // implicit iterator copies, or we can gather in one pass and then split
-        let contexts: ~[super::Context] = eniter.map(|(_,ctx)| ctx).collect();
-        let distances: ~[u16] = eniter.map(|(d,_)| d).collect();
+        let contexts: Vec<super::Context> = eniter.map(|(_,ctx)| ctx).collect();
+        let distances: Vec<u16> = eniter.map(|(d,_)| d).collect();
         let mut output = Vec::from_elem(n, 0u8);
         let mut di = 0u;
         super::decode(init, output.as_mut_slice(), &mut mtf, |ctx| {
-            assert_eq!(contexts[di], ctx);
+            assert_eq!(contexts.as_slice()[di], ctx);
             di += 1;
-            Ok(distances[di-1] as uint)
+            Ok(distances.as_slice()[di-1] as uint)
         }).unwrap();
         assert_eq!(di, distances.len());
         assert_eq!(output.as_slice(), bytes);

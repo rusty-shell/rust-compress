@@ -90,10 +90,10 @@ impl HuffmanTree {
         // Make sure that this tree is sane. Each bit gives us 2x more codes to
         // work with, but if the counts add up to greater than the available
         // amount, then this is an invalid table.
-        let mut left = 1;
+        let mut left = 1i;
         for i in range(1, MAXBITS + 1) {
             left *= 2;
-            left -= tree.count[i];
+            left -= tree.count[i] as int;
             if left < 0 { return error(InvalidHuffmanTree) }
         }
 

@@ -57,8 +57,8 @@ impl Config {
 }
 
 struct Pass {
-    encode: |~Writer,&Config|:'static -> ~io::Writer,
-    decode: |~Reader,&Config|:'static -> ~io::Reader,
+    encode: |Box<Writer>,&Config|:'static -> Box<io::Writer>,
+    decode: |Box<Reader>,&Config|:'static -> Box<io::Reader>,
     info: ~str,
 }
 
@@ -83,19 +83,19 @@ pub fn main() {
     });*/
     passes.insert("bwt".to_str(), Pass {
         encode: |w,c| {
-            ~bwt::Encoder::new(w, c.block_size) as ~Writer
+            box bwt::Encoder::new(w, c.block_size) as Box<Writer>
         },
         decode: |r,_c| {
-            ~bwt::Decoder::new(r, true) as ~Reader
+            box bwt::Decoder::new(r, true) as Box<Reader>
         },
         info: "Burrows-Wheeler Transformation".to_str(),
     });
     passes.insert("mtf".to_str(), Pass {
         encode: |w,_c| {
-            ~bwt::mtf::Encoder::new(w) as ~Writer
+            box bwt::mtf::Encoder::new(w) as Box<Writer>
         },
         decode: |r,_c| {
-            ~bwt::mtf::Decoder::new(r) as ~Reader
+            box bwt::mtf::Decoder::new(r) as Box<Reader>
         },
         info: "Move-To-Front Transformation".to_str(),
     });
@@ -111,15 +111,15 @@ pub fn main() {
     });*/
     passes.insert("lz4".to_str(), Pass {
         encode: |w,_c| {
-            ~lz4::Encoder::new(w) as ~Writer
+            box lz4::Encoder::new(w) as Box<Writer>
         },
         decode: |r,_c| { // LZ4 decoder seem to work
-            ~lz4::Decoder::new(r) as ~Reader
+            box lz4::Decoder::new(r) as Box<Reader>
         },
         info: "Ziv-Lempel derivative, focused at speed".to_str(),
     });
 
-    let config = Config::query(os::args());
+    let config = Config::query(os::args().as_slice());
     let mut input = io::stdin();
     let mut output = io::stdout();
     if config.decompress {
@@ -140,7 +140,7 @@ pub fn main() {
             let bytes = input.read_exact(len).unwrap();
             str::from_utf8(bytes.as_slice()).unwrap().to_owned()
         });
-        let mut rsum: ~Reader = ~input;
+        let mut rsum: Box<Reader> = box input;
         for met in methods.iter() {
             info!("Found pass {}", *met);
             match passes.find_mut(met) {
@@ -167,7 +167,7 @@ pub fn main() {
             output.write_u8(met.len() as u8).unwrap();
             output.write_str(*met).unwrap();
         }
-        let mut wsum: ~Writer = ~output;
+        let mut wsum: Box<Writer> = box output;
         for met in config.methods.iter() {
             match passes.find_mut(met) {
                 Some(pa) => wsum = (pa.encode)(wsum, &config),
