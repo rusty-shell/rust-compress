@@ -30,6 +30,7 @@ This is an original implementation.
 
 */
 
+use std::fmt::Show;
 use std::io::IoResult;
 use std::vec::Vec;
 #[cfg(tune)]
@@ -156,15 +157,13 @@ impl RangeEncoder {
 }
 
 
-pub type Value = uint;
-
 /// An abstract model to produce probability ranges
 /// Can be a table, a mix of tables, or just a smart function.
-pub trait Model {
+pub trait Model<V> {
     /// get the probability range of a value
-    fn get_range(&self, value: Value) -> (Border,Border);
+    fn get_range(&self, value: V) -> (Border,Border);
     /// find the value by a given probability offset, return with the range
-    fn find_value(&self, offset: Border) -> (Value,Border,Border);
+    fn find_value(&self, offset: Border) -> (V,Border,Border);
     /// sum of all probabilities
     fn get_denominator(&self) -> Border;
 }
@@ -175,7 +174,7 @@ pub static range_default_threshold: Border = 1<<14;
 
 /// Encode 'value', using a model and a range encoder
 /// returns a list of output bytes
-pub fn encode<M: Model>(value: Value, model: &M, re: &mut RangeEncoder, accum: &mut Vec<Symbol>) {
+pub fn encode<V: Copy + Show, M: Model<V>>(value: V, model: &M, re: &mut RangeEncoder, accum: &mut Vec<Symbol>) {
     let (lo, hi) = model.get_range(value);
     let total = model.get_denominator();
     debug!("\tEncoding value {} of range [{}-{}) with total {}", value, lo, hi, total);
@@ -184,14 +183,14 @@ pub fn encode<M: Model>(value: Value, model: &M, re: &mut RangeEncoder, accum: &
 
 /// Decode a value using given 'code' on the range encoder
 /// Returns a (value, num_symbols_to_shift) pair
-pub fn decode<M: Model>(code: Border, model: &M, re: &mut RangeEncoder) -> (Value,uint) {
+pub fn decode<V: Copy + Show, M: Model<V>>(code: Border, model: &M, re: &mut RangeEncoder) -> (V,uint) {
     let total = model.get_denominator();
     let offset = re.query(total, code);
     let (value, lo, hi) = model.find_value(offset);
     debug!("\tDecoding value {} of offset {} with total {}", value, offset, total);
     let mut shift_bytes = 0u;
     re.process(total, lo, hi, |_| shift_bytes+=1);
-    (value,shift_bytes)
+    (value, shift_bytes)
 }
 
 
@@ -215,7 +214,7 @@ impl<W: Writer> Encoder<W> {
     }
 
     /// Encode an abstract value under the given 'model'
-    pub fn encode<M: Model>(&mut self, value: Value, model: &M) -> IoResult<()> {
+    pub fn encode<V: Copy + Show, M: Model<V>>(&mut self, value: V, model: &M) -> IoResult<()> {
         self.buffer.truncate(0);
         encode(value, model, &mut self.range, &mut self.buffer);
         self.bytes_written += self.buffer.len();
@@ -277,7 +276,7 @@ impl<R: Reader> Decoder<R> {
     }
 
     /// Decode an abstract value based on the given model
-    pub fn decode<M: Model>(&mut self, model: &M) -> IoResult<Value> {
+    pub fn decode<V: Copy + Show, M: Model<V>>(&mut self, model: &M) -> IoResult<V> {
         assert!(self.bytes_read > 0);
         let (value,shift) = decode(self.code, model, &mut self.range);
         self.bytes_read += shift;

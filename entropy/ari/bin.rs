@@ -11,7 +11,7 @@ The simplicity of the domain allows for normalized updates in place using bit sh
 
 */
 
-use super::{Border, Value};
+use super::Border;
 
 /// A binary value frequency model
 pub struct Model {
@@ -69,9 +69,8 @@ impl Model {
 
     /// Update frequencies in favor of given 'value'
     /// Lower factors produce more aggressive updates
-    pub fn update(&mut self, value: Value, factor: uint) {
-        assert!(value < 2);
-        if value==1 {
+    pub fn update(&mut self, value: bool, factor: uint) {
+        if value {
             self.update_one(factor)
         }else {
             self.update_zero(factor)
@@ -79,23 +78,23 @@ impl Model {
     }
 }
 
-impl super::Model for Model {
-    fn get_range(&self, value: Value) -> (Border,Border) {
-        if value==0 {
-            (0, self.zero)
-        }else {
+impl super::Model<bool> for Model {
+    fn get_range(&self, value: bool) -> (Border,Border) {
+        if value {
             (self.zero, self.total)
+        }else {
+            (0, self.zero)
         }
     }
 
-    fn find_value(&self, offset: Border) -> (Value,Border,Border) {
+    fn find_value(&self, offset: Border) -> (bool,Border,Border) {
         assert!(offset < self.total,
             "Invalid frequency offset {} requested under total {}",
             offset, self.total);
         if offset < self.zero {
-            (0, 0, self.zero)
+            (false, 0, self.zero)
         }else {
-            (1, self.zero, self.total)
+            (true, self.zero, self.total)
         }
     }
 
@@ -134,26 +133,26 @@ impl<'a> SumProxy<'a> {
     }
 }
 
-impl<'a> super::Model for SumProxy<'a> {
-    fn get_range(&self, value: Value) -> (Border,Border) {
+impl<'a> super::Model<bool> for SumProxy<'a> {
+    fn get_range(&self, value: bool) -> (Border,Border) {
         let zero = self.get_probability_zero();
-        if value==0 {
-            (0, zero)
-        }else {
+        if value {
             (zero, self.get_denominator())
+        }else {
+            (0, zero)
         }
     }
 
-    fn find_value(&self, offset: Border) -> (Value,Border,Border) {
+    fn find_value(&self, offset: Border) -> (bool,Border,Border) {
         let zero = self.get_probability_zero();
         let total = self.get_denominator();
         assert!(offset < total,
             "Invalid frequency offset {} requested under total {}",
             offset, total);
         if offset < zero {
-            (0, 0, zero)
+            (false, 0, zero)
         }else {
-            (1, zero, total)
+            (true, zero, total)
         }
     }
 
