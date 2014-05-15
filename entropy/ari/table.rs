@@ -12,7 +12,7 @@ The module also implements Reader/Writer using simple byte coding.
 */
 
 use std::io;
-use super::{Border, Value};
+use super::Border;
 
 
 pub type Frequency = u16;
@@ -32,7 +32,7 @@ pub struct Model {
 
 impl Model {
     /// Create a new table with frequencies initialized by a function
-    pub fn new_custom(num_values: uint, threshold: Border, fn_init: |Value|-> Frequency) -> Model {
+    pub fn new_custom(num_values: uint, threshold: Border, fn_init: |uint|-> Frequency) -> Model {
         let freq = Vec::from_fn(num_values, fn_init);
         let total = freq.iter().fold(0 as Border, |u,&f| u+(f as Border));
         let mut ft = Model {
@@ -64,7 +64,7 @@ impl Model {
     /// Adapt the table in favor of given 'value'
     /// using 'add_log' and 'add_const' to produce the additive factor
     /// the higher 'add_log' is, the more concervative is the adaptation
-    pub fn update(&mut self, value: Value, add_log: uint, add_const: Border) {
+    pub fn update(&mut self, value: uint, add_log: uint, add_const: Border) {
         let add = (self.total>>add_log) + add_const;
         assert!(add < 2*self.cut_threshold);
         debug!("\tUpdating by adding {} to value {}", add, value);
@@ -94,13 +94,13 @@ impl Model {
     }
 }
 
-impl super::Model for Model {
-    fn get_range(&self, value: Value) -> (Border,Border) {
+impl super::Model<uint> for Model {
+    fn get_range(&self, value: uint) -> (Border,Border) {
         let lo = self.table.slice_to(value).iter().fold(0, |u,&f| u+(f as Border));
         (lo, lo + (*self.table.get(value) as Border))
     }
 
-    fn find_value(&self, offset: Border) -> (Value,Border,Border) {
+    fn find_value(&self, offset: Border) -> (uint,Border,Border) {
         assert!(offset < self.total,
             "Invalid frequency offset {} requested under total {}",
             offset, self.total);
@@ -144,15 +144,15 @@ impl<'a> SumProxy<'a> {
     }
 }
 
-impl<'a> super::Model for SumProxy<'a> {
-    fn get_range(&self, value: Value) -> (Border,Border) {
+impl<'a> super::Model<uint> for SumProxy<'a> {
+    fn get_range(&self, value: uint) -> (Border,Border) {
         let (lo0, hi0) = self.first.get_range(value);
         let (lo1, hi1) = self.second.get_range(value);
         let (wa, wb, ws) = (self.w_first, self.w_second, self.w_shift);
         ((wa*lo0 + wb*lo1)>>ws, (wa*hi0 + wb*hi1)>>ws)
     }
 
-    fn find_value(&self, offset: Border) -> (Value,Border,Border) {
+    fn find_value(&self, offset: Border) -> (uint,Border,Border) {
         assert!(offset < self.get_denominator(),
             "Invalid frequency offset {} requested under total {}",
             offset, self.get_denominator());
@@ -208,7 +208,7 @@ impl<W: Writer> ByteEncoder<W> {
 impl<W: Writer> Writer for ByteEncoder<W> {
     fn write(&mut self, buf: &[u8]) -> io::IoResult<()> {
         buf.iter().fold(Ok(()), |result,byte| {
-            let value = *byte as Value;
+            let value = *byte as uint;
             let ret = self.encoder.encode(value, &self.freq);
             self.freq.update(value, 10, 1);
             result.and(ret)

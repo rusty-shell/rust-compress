@@ -19,7 +19,7 @@ fn encode_binary(bytes: &[u8], model: &mut super::bin::Model, factor: uint) -> V
     let mut encoder = super::Encoder::new(MemWriter::new());
     for &byte in bytes.iter() {
         for i in range(0,8) {
-            let bit = ((byte as super::Value)>>i) & 1;
+            let bit = (byte & (1<<i)) != 0;
             encoder.encode(bit, model).unwrap();
             model.update(bit, factor);
         }
@@ -60,7 +60,7 @@ fn roundtrip_proxy(bytes: &[u8]) {
     // encode (high 4 bits with the proxy table, low 4 bits with the proxy binary)
     let mut encoder = super::Encoder::new(MemWriter::new());
     for &byte in bytes.iter() {
-        let high = (byte>>4) as super::Value;
+        let high = (byte>>4) as uint;
         {
             let proxy = super::table::SumProxy::new(2, &t0, 1, &t1, 0);
             encoder.encode(high, &proxy).unwrap();
@@ -68,7 +68,7 @@ fn roundtrip_proxy(bytes: &[u8]) {
         t0.update(high, update0, 1);
         t1.update(high, update1, 1);
         for i in range(0,4) {
-            let bit = ((byte as super::Value)>>i) & 1;
+            let bit = (byte & (1<<i)) != 0;
             {
                 let proxy = super::bin::SumProxy::new(1, &b0, 1, &b1, 1);
                 encoder.encode(bit, &proxy).unwrap();
