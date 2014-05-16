@@ -366,7 +366,7 @@ impl<R: Reader> Decoder<R> {
 
         self.temp.truncate(0);
         self.temp.reserve(n);
-        try!(self.r.push_exact(&mut self.temp, n));
+        try!(self.r.push_at_least(n, n, &mut self.temp));
 
         let origin = try!(self.r.read_le_u32()) as uint;
         self.output.truncate(0);

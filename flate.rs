@@ -227,7 +227,7 @@ impl<R: Reader> Decoder<R> {
         let len = try!(self.r.read_le_u16());
         let nlen = try!(self.r.read_le_u16());
         if !nlen != len { return error(InvalidStaticSize) }
-        try!(self.r.push_exact(&mut self.block, len as uint));
+        try!(self.r.push_at_least(len as uint, len as uint, &mut self.block));
         self.update_output(0);
         self.bitcnt = 0;
         self.bitbuf = 0;

@@ -246,7 +246,7 @@ impl<R: Reader> Decoder<R> {
                 let amt = (n & 0x7fffffff) as uint;
                 self.output.truncate(0);
                 self.output.reserve(amt);
-                try!(self.r.push_exact(&mut self.output, amt));
+                try!(self.r.push_at_least(amt, amt, &mut self.output));
                 self.start = 0;
                 self.end = amt;
             }
@@ -256,7 +256,7 @@ impl<R: Reader> Decoder<R> {
                 let n = n as uint;
                 self.temp.truncate(0);
                 self.temp.reserve(n);
-                try!(self.r.push_exact(&mut self.temp, n));
+                try!(self.r.push_at_least(n, n, &mut self.temp));
 
                 let target = cmp::min(self.max_block_size, 4 * n / 3);
                 self.output.truncate(0);
