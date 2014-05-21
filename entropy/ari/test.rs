@@ -2,6 +2,7 @@ use std::io::{BufReader, BufWriter, MemWriter, SeekSet};
 use std::vec::Vec;
 use test::Bencher;
 
+
 fn roundtrip(bytes: &[u8]) {
     info!("Roundtrip Ari of size {}", bytes.len());
     let mut e = super::table::ByteEncoder::new(MemWriter::new());
@@ -34,7 +35,6 @@ fn roundtrip_binary(bytes: &[u8], factor: uint) {
     let output = encode_binary(bytes, &mut bm, factor);
     bm.reset_flat();
     let mut decoder = super::Decoder::new(BufReader::new(output.as_slice()));
-    decoder.start().unwrap();
     for &byte in bytes.iter() {
         let mut value = 0u8;
         for i in range(0,8) {
@@ -44,6 +44,43 @@ fn roundtrip_binary(bytes: &[u8], factor: uint) {
         }
         assert_eq!(value, byte);
     }
+}
+
+fn roundtrip_term(bytes1: &[u8], bytes2: &[u8]) {
+    let mw = MemWriter::new();
+    let mw = {
+        let mut e = super::table::ByteEncoder::new(mw);
+        e.write(bytes1).unwrap();
+        let (stream, rez) = e.finish();
+        rez.unwrap();
+        stream
+    };
+    let mw = {
+        let mut e = super::table::ByteEncoder::new(mw);
+        e.write(bytes2).unwrap();
+        let (stream, rez) = e.finish();
+        rez.unwrap();
+        stream
+    };
+    let encoded = mw.unwrap();
+    debug!("Roundtrip term input {:?}:{:?} encoded {:?}", bytes1, bytes2, encoded);
+    let br = BufReader::new(encoded.as_slice());
+    let br = {
+        let mut d = super::ByteDecoder::new(br);
+        let decoded = d.read_to_end().unwrap();
+        assert_eq!(bytes1.as_slice(), decoded.as_slice());
+        let (stream, err) = d.finish();
+        err.unwrap();
+        stream
+    };
+    {
+        let mut d = super::ByteDecoder::new(br);
+        let decoded = d.read_to_end().unwrap();
+        assert_eq!(bytes2.as_slice(), decoded.as_slice());
+        let (stream, err) = d.finish();
+        err.unwrap();
+        stream
+    };
 }
 
 fn roundtrip_proxy(bytes: &[u8]) {
@@ -86,7 +123,6 @@ fn roundtrip_proxy(bytes: &[u8]) {
     b0.reset_flat();
     b1.reset_flat();
     let mut decoder = super::Decoder::new(BufReader::new(buffer.as_slice()));
-    decoder.start().unwrap();
     for &byte in bytes.iter() {
         let high = {
             let proxy = super::table::SumProxy::new(2, &t0, 1, &t1, 0);
@@ -119,6 +155,11 @@ fn roundtrips() {
 fn roundtrips_binary() {
     roundtrip_binary(bytes!("abracadabra"), 1);
     roundtrip_binary(include_bin!("../../data/test.txt"), 5);
+}
+
+#[test]
+fn roundtrips_term() {
+    roundtrip_term(bytes!("abra"), bytes!("cadabra"));
 }
 
 #[test]

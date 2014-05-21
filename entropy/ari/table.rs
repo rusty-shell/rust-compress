@@ -242,13 +242,15 @@ impl<R: Reader> ByteDecoder<R> {
             is_eof: false,
         }
     }
+
+    /// Finish decoding
+    pub fn finish(self) -> (R, io::IoResult<()>) {
+        self.decoder.finish()
+    }
 }
 
 impl<R: Reader> Reader for ByteDecoder<R> {
     fn read(&mut self, dst: &mut [u8]) -> io::IoResult<uint> {
-        if self.decoder.tell() == 0 {
-            try!(self.decoder.start());
-        }
         if self.is_eof {
             return Err(io::standard_error(io::EndOfFile))
         }
