@@ -16,7 +16,7 @@ extern crate collections;
 use collections::HashMap;
 use std::{io, os, str};
 use compress::{bwt, lz4};
-//use compress::entropy::ari;
+use compress::entropy::ari;
 
 
 static MAGIC    : u32   = 0x73632172;   //=r!cs
@@ -57,8 +57,8 @@ impl Config {
 }
 
 struct Pass {
-    encode: |Box<Writer>,&Config|:'static -> Box<io::Writer>,
-    decode: |Box<Reader>,&Config|:'static -> Box<io::Reader>,
+    encode: |Box<Writer>, &Config|: 'static -> Box<io::Writer>,
+    decode: |Box<Reader>, &Config|: 'static -> Box<io::Reader>,
     info: ~str,
 }
 
@@ -71,16 +71,15 @@ pub fn main() {
         decode: |r,_| r,
         info: "pass-through".to_str(),
     });
-    /* // unclear what to do with Ari since it requires the size to be known
-    passes.insert(~"ari", Pass {
+    passes.insert("ari".to_str(), Pass {
         encode: |w,_c| {
-            ~ari::ByteEncoder::new(w) as ~Writer
+            box ari::ByteEncoder::new(w) as Box<Writer>
         },
         decode: |r,_c| {
-            ~ari::ByteDecoder::new(r) as ~Reader
+            box ari::ByteDecoder::new(r) as Box<Reader>
         },
-        info: ~"Adaptive arithmetic byte coder",
-    });*/
+        info: "Adaptive arithmetic byte coder".to_str(),
+    });
     passes.insert("bwt".to_str(), Pass {
         encode: |w,c| {
             box bwt::Encoder::new(w, c.block_size) as Box<Writer>
