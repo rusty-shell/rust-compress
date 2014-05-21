@@ -52,6 +52,7 @@ static border_bits: uint = 32;
 static border_excess: uint = border_bits-symbol_bits;
 static border_symbol_mask: u32 = ((symbol_total-1) << border_excess) as u32;
 
+
 /// Range Encoder basic primitive
 /// Gets probability ranges on the input, produces whole bytes of code on the output,
 /// where the code is an arbitrary fixed-ppoint value inside the resulting probability range.
@@ -199,7 +200,6 @@ pub struct Encoder<W> {
     stream: W,
     range: RangeEncoder,
     buffer: Vec<Symbol>,
-    bytes_written: uint,
 }
 
 impl<W: Writer> Encoder<W> {
@@ -209,22 +209,19 @@ impl<W: Writer> Encoder<W> {
             stream: w,
             range: RangeEncoder::new(range_default_threshold),
             buffer: Vec::with_capacity(4),
-            bytes_written: 0,
         }
     }
 
-    /// Encode an abstract value under the given 'model'
+    /// Encode an abstract value under the given Model
     pub fn encode<V: Copy + Show, M: Model<V>>(&mut self, value: V, model: &M) -> IoResult<()> {
         self.buffer.truncate(0);
         encode(value, model, &mut self.range, &mut self.buffer);
-        self.bytes_written += self.buffer.len();
         self.stream.write(self.buffer.as_slice())
     }
 
-    /// Finish decoding by writing the code tail word
+    /// Finish encoding by writing the code tail word
     pub fn finish(mut self) -> (W, IoResult<()>) {
         assert!(border_bits == 32);
-        self.bytes_written += 4;
         let code = self.range.get_code_tail();
         let result = self.stream.write_be_u32(code);
         let result = result.and(self.stream.flush());
@@ -236,12 +233,7 @@ impl<W: Writer> Encoder<W> {
         self.stream.flush()
     }
 
-    /// Tell the number of bytes written so far
-    pub fn tell(&self) -> uint {
-        self.bytes_written
-    }
-
-    /// return the number of bytes lost due to threshold cuts and integer operations
+    /// Return the number of bytes lost due to threshold cuts and integer operations
     #[cfg(tune)]
     pub fn get_bytes_lost(&self) -> (f32, f32) {
         let (a,b) = self.range.get_bits_lost();
@@ -254,7 +246,7 @@ pub struct Decoder<R> {
     stream: R,
     range: RangeEncoder,
     code: Border,
-    bytes_read: uint,
+    bytes_pending: uint,
 }
 
 impl<R: Reader> Decoder<R> {
@@ -264,36 +256,30 @@ impl<R: Reader> Decoder<R> {
             stream: r,
             range: RangeEncoder::new(range_default_threshold),
             code: 0,
-            bytes_read: 0,
+            bytes_pending: border_bits>>3,
         }
     }
 
-    /// Start decoding by reading a full code word
-    pub fn start(&mut self) -> IoResult<()> {
-        assert!(border_bits == 32);
-        self.bytes_read += 4;
-        self.stream.read_be_u32().map(|code| {self.code=code})
+    fn feed(&mut self) -> IoResult<()> {
+        while self.bytes_pending != 0 {
+            let b = try!(self.stream.read_u8());
+            self.code = (self.code<<8) + (b as Border);
+            self.bytes_pending -= 1;
+        }
+        Ok(())
     }
 
-    /// Decode an abstract value based on the given model
+    /// Decode an abstract value based on the given Model
     pub fn decode<V: Copy + Show, M: Model<V>>(&mut self, model: &M) -> IoResult<V> {
-        assert!(self.bytes_read > 0);
-        let (value,shift) = decode(self.code, model, &mut self.range);
-        self.bytes_read += shift;
-        for b in self.stream.bytes().take(shift) {
-            self.code = (self.code<<8) + (b.unwrap() as Border);
-        }
+        self.feed().unwrap();
+        let (value, shift) = decode(self.code, model, &mut self.range);
+        self.bytes_pending = shift;
         Ok(value)
     }
 
-    /// Release the original reader
-    pub fn finish(self) -> R {
-        self.stream
-    }
-
-    /// Tell the number of bytes read so far
-    pub fn tell(&self) -> uint {
-        self.bytes_read
+    /// Finish decoding
+    pub fn finish(mut self) -> (R, IoResult<()>)  {
+        let err = self.feed();
+        (self.stream, err)
     }
 }
-
