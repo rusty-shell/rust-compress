@@ -44,13 +44,13 @@ pub mod table;
 mod test;
 
 pub type Symbol = u8;
-static symbol_bits: uint = 8;
-static symbol_total: uint = 1<<symbol_bits;
+static SYMBOL_BITS: uint = 8;
+static SYMBOL_TOTAL: uint = 1<<SYMBOL_BITS;
 
 pub type Border = u32;
-static border_bits: uint = 32;
-static border_excess: uint = border_bits-symbol_bits;
-static border_symbol_mask: u32 = ((symbol_total-1) << border_excess) as u32;
+static BORDER_BITS: uint = 32;
+static BORDER_EXCESS: uint = BORDER_BITS-SYMBOL_BITS;
+static BORDER_SYMBOL_MASK: u32 = ((SYMBOL_TOTAL-1) << BORDER_EXCESS) as u32;
 
 
 /// Range Encoder basic primitive
@@ -73,7 +73,7 @@ impl RangeEncoder {
     /// will keep the active range below 'max_range'
     /// A typical value is 16k
     pub fn new(max_range: Border) -> RangeEncoder {
-        assert!(max_range > (symbol_total as Border));
+        assert!(max_range > (SYMBOL_TOTAL as Border));
         RangeEncoder {
             low: 0,
             hai: -1,
@@ -117,21 +117,21 @@ impl RangeEncoder {
         let mut hi = self.low + range*to;
         self.bits_lost_on_division += RangeEncoder::count_bits(range*total, self.hai-self.low);
         loop {
-            if (lo^hi) & border_symbol_mask != 0 {
+            if (lo^hi) & BORDER_SYMBOL_MASK != 0 {
                 if hi-lo > self.threshold {
                     break
                 }
                 let old_range = hi-lo;
-                let lim = hi & border_symbol_mask;
+                let lim = hi & BORDER_SYMBOL_MASK;
                 if hi-lim >= lim-lo {lo=lim}
                 else {hi=lim-1};
                 assert!(lo < hi);
                 self.bits_lost_on_threshold_cut += RangeEncoder::count_bits(hi-lo, old_range);
             }
 
-            debug!("\t\tShifting on [{}-{}) to symbol {}", lo, hi, lo>>border_excess);
-            fn_shift((lo>>border_excess) as Symbol);
-            lo<<=symbol_bits; hi<<=symbol_bits;
+            debug!("\t\tShifting on [{}-{}) to symbol {}", lo, hi, lo>>BORDER_EXCESS);
+            fn_shift((lo>>BORDER_EXCESS) as Symbol);
+            lo<<=SYMBOL_BITS; hi<<=SYMBOL_BITS;
             assert!(lo < hi);
         }
         self.low = lo;
@@ -171,7 +171,7 @@ pub trait Model<V> {
 
 
 /// Arithmetic coding functions
-pub static range_default_threshold: Border = 1<<14;
+pub static RANGE_DEFAULT_THRESHOLD: Border = 1<<14;
 
 /// Encode 'value', using a model and a range encoder
 /// returns a list of output bytes
@@ -207,7 +207,7 @@ impl<W: Writer> Encoder<W> {
     pub fn new(w: W) -> Encoder<W> {
         Encoder {
             stream: w,
-            range: RangeEncoder::new(range_default_threshold),
+            range: RangeEncoder::new(RANGE_DEFAULT_THRESHOLD),
             buffer: Vec::with_capacity(4),
         }
     }
@@ -221,7 +221,7 @@ impl<W: Writer> Encoder<W> {
 
     /// Finish encoding by writing the code tail word
     pub fn finish(mut self) -> (W, IoResult<()>) {
-        assert!(border_bits == 32);
+        assert!(BORDER_BITS == 32);
         let code = self.range.get_code_tail();
         let result = self.stream.write_be_u32(code);
         let result = result.and(self.stream.flush());
@@ -254,9 +254,9 @@ impl<R: Reader> Decoder<R> {
     pub fn new(r: R) -> Decoder<R> {
         Decoder {
             stream: r,
-            range: RangeEncoder::new(range_default_threshold),
+            range: RangeEncoder::new(RANGE_DEFAULT_THRESHOLD),
             code: 0,
-            bytes_pending: border_bits>>3,
+            bytes_pending: BORDER_BITS>>3,
         }
     }
 
