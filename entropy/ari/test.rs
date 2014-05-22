@@ -31,7 +31,7 @@ fn encode_binary(bytes: &[u8], model: &mut super::bin::Model, factor: uint) -> V
 }
 
 fn roundtrip_binary(bytes: &[u8], factor: uint) {
-    let mut bm = super::bin::Model::new_flat(super::range_default_threshold >> 3);
+    let mut bm = super::bin::Model::new_flat(super::RANGE_DEFAULT_THRESHOLD >> 3);
     let output = encode_binary(bytes, &mut bm, factor);
     bm.reset_flat();
     let mut decoder = super::Decoder::new(BufReader::new(output.as_slice()));
@@ -89,7 +89,7 @@ fn roundtrip_proxy(bytes: &[u8]) {
     let factor1 = 5;
     let update0 = 10;
     let update1 = 5;
-    let threshold = super::range_default_threshold >> 3;
+    let threshold = super::RANGE_DEFAULT_THRESHOLD >> 3;
     let mut t0 = super::table::Model::new_flat(16, threshold);
     let mut t1 = super::table::Model::new_flat(16, threshold);
     let mut b0 = super::bin::Model::new_flat(threshold);

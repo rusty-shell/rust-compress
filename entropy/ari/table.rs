@@ -190,16 +190,16 @@ pub struct ByteEncoder<W> {
 impl<W: Writer> ByteEncoder<W> {
     /// Create a new encoder on top of a given Writer
     pub fn new(w: W) -> ByteEncoder<W> {
-        let freq_max = super::range_default_threshold >> 2;
+        let freq_max = super::RANGE_DEFAULT_THRESHOLD >> 2;
         ByteEncoder {
             encoder: super::Encoder::new(w),
-            freq: Model::new_flat(super::symbol_total+1, freq_max),
+            freq: Model::new_flat(super::SYMBOL_TOTAL+1, freq_max),
         }
     }
 
     /// Finish encoding & write the terminator symbol
     pub fn finish(mut self) -> (W, io::IoResult<()>) {
-        let ret = self.encoder.encode(super::symbol_total, &self.freq);
+        let ret = self.encoder.encode(super::SYMBOL_TOTAL, &self.freq);
         let (w,r2) = self.encoder.finish();
         (w, ret.and(r2))
     }
@@ -235,10 +235,10 @@ pub struct ByteDecoder<R> {
 impl<R: Reader> ByteDecoder<R> {
     /// Create a decoder on top of a given Reader
     pub fn new(r: R) -> ByteDecoder<R> {
-        let freq_max = super::range_default_threshold >> 2;
+        let freq_max = super::RANGE_DEFAULT_THRESHOLD >> 2;
         ByteDecoder {
             decoder: super::Decoder::new(r),
-            freq: Model::new_flat(super::symbol_total+1, freq_max),
+            freq: Model::new_flat(super::SYMBOL_TOTAL+1, freq_max),
             is_eof: false,
         }
     }
@@ -257,7 +257,7 @@ impl<R: Reader> Reader for ByteDecoder<R> {
         let mut amount = 0u;
         for out_byte in dst.mut_iter() {
             let value = try!(self.decoder.decode(&self.freq));
-            if value == super::symbol_total {
+            if value == super::SYMBOL_TOTAL {
                 self.is_eof = true;
                 break
             }
