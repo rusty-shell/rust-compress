@@ -32,9 +32,6 @@ This is an original implementation.
 
 use std::fmt::Show;
 use std::io::IoResult;
-use std::vec::Vec;
-#[cfg(tune)]
-use std::num;
 
 pub use self::table::{ByteDecoder, ByteEncoder};
 
@@ -48,9 +45,12 @@ static SYMBOL_BITS: uint = 8;
 static SYMBOL_TOTAL: uint = 1<<SYMBOL_BITS;
 
 pub type Border = u32;
-static BORDER_BITS: uint = 32;
+static BORDER_BYTES: uint = 4;
+static BORDER_BITS: uint = BORDER_BYTES * 8;
 static BORDER_EXCESS: uint = BORDER_BITS-SYMBOL_BITS;
 static BORDER_SYMBOL_MASK: u32 = ((SYMBOL_TOTAL-1) << BORDER_EXCESS) as u32;
+
+pub static RANGE_DEFAULT_THRESHOLD: Border = 1<<14;
 
 
 /// Range Encoder basic primitive
@@ -63,7 +63,7 @@ pub struct RangeEncoder {
     /// has to be at least the largest incoming 'total',
     /// and optimally many times larger
     pub threshold: Border,
-    // tune parameters
+    /// Tuning parameters
     bits_lost_on_threshold_cut: f32,
     bits_lost_on_division: f32,
 }
@@ -71,9 +71,8 @@ pub struct RangeEncoder {
 impl RangeEncoder {
     /// Create a new instance
     /// will keep the active range below 'max_range'
-    /// A typical value is 16k
     pub fn new(max_range: Border) -> RangeEncoder {
-        assert!(max_range > (SYMBOL_TOTAL as Border));
+        debug_assert!(max_range > (SYMBOL_TOTAL as Border));
         RangeEncoder {
             low: 0,
             hai: -1,
@@ -91,7 +90,7 @@ impl RangeEncoder {
 
     #[cfg(tune)]
     fn count_bits(range: Border, total: Border) -> f32 {
-        -num::log2((range as f32) / (total as f32))
+        -((range as f32) / (total as f32)).log2()
     }
 
     #[cfg(not(tune))]
@@ -99,23 +98,24 @@ impl RangeEncoder {
         0.0
     }
 
-    /// return the number of bits lost due to threshold cuts and integer operations
+    /// Return the number of bits lost due to threshold cuts and integer operations
     #[cfg(tune)]
     pub fn get_bits_lost(&self) -> (f32, f32) {
         (self.bits_lost_on_threshold_cut, self.bits_lost_on_division)
     }
 
     /// Process a given interval [from/total,to/total) into the current range
-    /// Yields stabilized code symbols (bytes) into the 'fn_shift' function
-    pub fn process(&mut self, total: Border, from: Border, to: Border, fn_shift: |Symbol|) {
+    /// write into the output slice, and return the number of symbols produced
+    pub fn process(&mut self, total: Border, from: Border, to: Border, output: &mut [Symbol]) -> uint {
         let range = (self.hai - self.low) / total;
-        assert!(range>0, "RangeCoder range is too narrow [{}-{}) for the total {}",
+        debug_assert!(range>0, "RangeCoder range is too narrow [{}-{}) for the total {}",
             self.low, self.hai, total);
         debug!("\t\tProcessing [{}-{})/{} with range {}", from, to, total, range);
-        assert!(from < to);
+        debug_assert!(from < to);
         let mut lo = self.low + range*from;
         let mut hi = self.low + range*to;
         self.bits_lost_on_division += RangeEncoder::count_bits(range*total, self.hai-self.low);
+        let mut num_shift = 0u;
         loop {
             if (lo^hi) & BORDER_SYMBOL_MASK != 0 {
                 if hi-lo > self.threshold {
@@ -125,24 +125,26 @@ impl RangeEncoder {
                 let lim = hi & BORDER_SYMBOL_MASK;
                 if hi-lim >= lim-lo {lo=lim}
                 else {hi=lim-1};
-                assert!(lo < hi);
+                debug_assert!(lo < hi);
                 self.bits_lost_on_threshold_cut += RangeEncoder::count_bits(hi-lo, old_range);
             }
 
             debug!("\t\tShifting on [{}-{}) to symbol {}", lo, hi, lo>>BORDER_EXCESS);
-            fn_shift((lo>>BORDER_EXCESS) as Symbol);
+            output[num_shift] = (lo>>BORDER_EXCESS) as Symbol;
+            num_shift += 1;
             lo<<=SYMBOL_BITS; hi<<=SYMBOL_BITS;
-            assert!(lo < hi);
+            debug_assert!(lo < hi);
         }
         self.low = lo;
         self.hai = hi;
+        num_shift
     }
 
     /// Query the value encoded by 'code' in range [0,total)
     pub fn query(&self, total: Border, code: Border) -> Border {
         debug!("\t\tQuerying code {} of total {} under range [{}-{})",
             code, total, self.low, self.hai);
-        assert!(self.low <= code && code < self.hai)
+        debug_assert!(self.low <= code && code < self.hai)
         let range = (self.hai - self.low) / total;
         (code - self.low) / range
     }
@@ -160,38 +162,36 @@ impl RangeEncoder {
 
 /// An abstract model to produce probability ranges
 /// Can be a table, a mix of tables, or just a smart function.
-pub trait Model<V> {
-    /// get the probability range of a value
+pub trait Model<V: Copy + Show> {
+    /// Get the probability range of a value
     fn get_range(&self, value: V) -> (Border,Border);
-    /// find the value by a given probability offset, return with the range
+    /// Find the value by a given probability offset, return with the range
     fn find_value(&self, offset: Border) -> (V,Border,Border);
-    /// sum of all probabilities
+    /// Get the sum of all probabilities
     fn get_denominator(&self) -> Border;
-}
 
+    /// Encode a value using a range encoder
+    /// return the number of symbols written
+    fn encode(&self, value: V, re: &mut RangeEncoder, out: &mut [Symbol]) -> uint {
+        let (lo, hi) = self.get_range(value);
+        let total = self.get_denominator();
+        debug!("\tEncoding value {} of range [{}-{}) with total {}", value, lo, hi, total);
+        re.process(total, lo, hi, out)
+    }
 
-/// Arithmetic coding functions
-pub static RANGE_DEFAULT_THRESHOLD: Border = 1<<14;
-
-/// Encode 'value', using a model and a range encoder
-/// returns a list of output bytes
-pub fn encode<V: Copy + Show, M: Model<V>>(value: V, model: &M, re: &mut RangeEncoder, accum: &mut Vec<Symbol>) {
-    let (lo, hi) = model.get_range(value);
-    let total = model.get_denominator();
-    debug!("\tEncoding value {} of range [{}-{}) with total {}", value, lo, hi, total);
-    re.process(total, lo, hi, |s| accum.push(s));
-}
-
-/// Decode a value using given 'code' on the range encoder
-/// Returns a (value, num_symbols_to_shift) pair
-pub fn decode<V: Copy + Show, M: Model<V>>(code: Border, model: &M, re: &mut RangeEncoder) -> (V,uint) {
-    let total = model.get_denominator();
-    let offset = re.query(total, code);
-    let (value, lo, hi) = model.find_value(offset);
-    debug!("\tDecoding value {} of offset {} with total {}", value, offset, total);
-    let mut shift_bytes = 0u;
-    re.process(total, lo, hi, |_| shift_bytes+=1);
-    (value, shift_bytes)
+    /// Decode a value using given 'code' on the range encoder
+    /// return a (value, num_symbols_to_shift) pair
+    fn decode(&self, code: Border, re: &mut RangeEncoder) -> (V, uint) {
+        let total = self.get_denominator();
+        let offset = re.query(total, code);
+        let (value, lo, hi) = self.find_value(offset);
+        debug!("\tDecoding value {} of offset {} with total {}", value, offset, total);
+        let mut out = [0 as Symbol, ..BORDER_BYTES];
+        let shift = re.process(total, lo, hi, out.as_mut_slice());
+        debug_assert_eq!(if shift==0 {0} else {code>>(BORDER_BITS - shift*8)},
+            out.slice_to(shift).iter().fold(0 as Border, |u,&b| (u<<8)+(b as Border)));
+        (value, shift)
+    }
 }
 
 
@@ -199,7 +199,6 @@ pub fn decode<V: Copy + Show, M: Model<V>>(code: Border, model: &M, re: &mut Ran
 pub struct Encoder<W> {
     stream: W,
     range: RangeEncoder,
-    buffer: Vec<Symbol>,
 }
 
 impl<W: Writer> Encoder<W> {
@@ -208,20 +207,19 @@ impl<W: Writer> Encoder<W> {
         Encoder {
             stream: w,
             range: RangeEncoder::new(RANGE_DEFAULT_THRESHOLD),
-            buffer: Vec::with_capacity(4),
         }
     }
 
     /// Encode an abstract value under the given Model
     pub fn encode<V: Copy + Show, M: Model<V>>(&mut self, value: V, model: &M) -> IoResult<()> {
-        self.buffer.truncate(0);
-        encode(value, model, &mut self.range, &mut self.buffer);
-        self.stream.write(self.buffer.as_slice())
+        let mut buf = [0 as Symbol, ..BORDER_BYTES];
+        let num = model.encode(value, &mut self.range, buf.as_mut_slice());
+        self.stream.write(buf.slice_to(num))
     }
 
     /// Finish encoding by writing the code tail word
     pub fn finish(mut self) -> (W, IoResult<()>) {
-        assert!(BORDER_BITS == 32);
+        debug_assert!(BORDER_BITS == 32);
         let code = self.range.get_code_tail();
         let result = self.stream.write_be_u32(code);
         let result = result.and(self.stream.flush());
@@ -256,7 +254,7 @@ impl<R: Reader> Decoder<R> {
             stream: r,
             range: RangeEncoder::new(RANGE_DEFAULT_THRESHOLD),
             code: 0,
-            bytes_pending: BORDER_BITS>>3,
+            bytes_pending: BORDER_BYTES,
         }
     }
 
@@ -272,7 +270,7 @@ impl<R: Reader> Decoder<R> {
     /// Decode an abstract value based on the given Model
     pub fn decode<V: Copy + Show, M: Model<V>>(&mut self, model: &M) -> IoResult<V> {
         self.feed().unwrap();
-        let (value, shift) = decode(self.code, model, &mut self.range);
+        let (value, shift) = model.decode(self.code, &mut self.range);
         self.bytes_pending = shift;
         Ok(value)
     }
