@@ -35,6 +35,7 @@ use std::io::IoResult;
 
 pub use self::table::{ByteDecoder, ByteEncoder};
 
+pub mod apm;
 pub mod bin;
 pub mod table;
 #[cfg(test)]

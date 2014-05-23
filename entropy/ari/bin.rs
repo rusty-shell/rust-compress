@@ -19,24 +19,27 @@ pub struct Model {
     zero: Border,
     /// total frequency (constant)
     total: Border,
+    /// learning rate
+    pub rate: Border,
 }
 
 impl Model {
     /// Create a new flat (50/50 probability) instance
-    pub fn new_flat(threshold: Border) -> Model {
-        assert!(threshold >= 2);
+    pub fn new_flat(threshold: Border, rate: Border) -> Model {
         Model {
             zero: threshold>>1,
             total: threshold,
+            rate: rate,
         }
     }
 
     /// Create a new instance with a given percentage for zeroes
-    pub fn new_custom(zero_percent: u8, threshold: Border) -> Model {
+    pub fn new_custom(zero_percent: u8, threshold: Border, rate: Border) -> Model {
         assert!(threshold >= 100);
         Model {
             zero: (zero_percent as Border)*threshold/100,
             total: threshold,
+            rate: rate,
         }
     }
 
@@ -56,24 +59,24 @@ impl Model {
     }
 
     /// Update the frequency of zero
-    pub fn update_zero(&mut self, factor: uint) {
-        debug!("\tUpdating zero by a factor of {}", factor);
-        self.zero += (self.total-self.zero) >> factor;
+    pub fn update_zero(&mut self) {
+        debug!("\tUpdating zero");
+        self.zero += (self.total-self.zero) >> self.rate;
     }
 
     /// Update the frequency of one
-    pub fn update_one(&mut self, factor: uint) {
-        debug!("\tUpdating one by a factor of {}", factor);
-        self.zero -= self.zero >> factor;
+    pub fn update_one(&mut self) {
+        debug!("\tUpdating one");
+        self.zero -= self.zero >> self.rate;
     }
 
     /// Update frequencies in favor of given 'value'
     /// Lower factors produce more aggressive updates
-    pub fn update(&mut self, value: bool, factor: uint) {
+    pub fn update(&mut self, value: bool) {
         if value {
-            self.update_one(factor)
+            self.update_one()
         }else {
-            self.update_zero(factor)
+            self.update_zero()
         }
     }
 }
