@@ -22,14 +22,14 @@ use compress::entropy::ari;
 static MAGIC    : u32   = 0x73632172;   //=r!cs
 
 struct Config {
-    exe_name: ~str,
-    methods: Vec<~str>,
+    exe_name: StrBuf,
+    methods: Vec<StrBuf>,
     block_size: uint,
     decompress: bool,
 }
 
 impl Config {
-    fn query(args: &[~str]) -> Config {
+    fn query(args: &[StrBuf]) -> Config {
         let mut cfg = Config {
             exe_name: args[0].clone(),
             methods: Vec::new(),
@@ -43,10 +43,11 @@ impl Config {
         });
 
         for arg in args.iter().skip(1) {
-            if arg.starts_with("-") {
-                match handlers.mut_iter().find(|&(&k,_)| arg.slice_from(1).starts_with(k)) {
-                    Some((k,h)) => (*h)(arg.slice_from(1+k.len()), &mut cfg),
-                    None => println!("Warning: unrecognized option: {}", *arg),
+			let slice = arg.as_slice();
+            if slice.starts_with("-") {
+                match handlers.mut_iter().find(|&(&k,_)| slice.slice_from(1).starts_with(k)) {
+                    Some((k,h)) => (*h)(slice.slice_from(1+k.len()), &mut cfg),
+                    None => println!("Warning: unrecognized option: {}", arg.as_slice()),
                 }
             }else {
                 cfg.methods.push(arg.to_owned());
@@ -59,13 +60,13 @@ impl Config {
 struct Pass {
     encode: |Box<Writer>, &Config|: 'static -> Box<io::Writer>,
     decode: |Box<Reader>, &Config|: 'static -> Box<io::Reader>,
-    info: ~str,
+    info: StrBuf,
 }
 
 
 /// main entry point
 pub fn main() {
-    let mut passes: HashMap<~str,Pass> = HashMap::new();
+    let mut passes: HashMap<StrBuf,Pass> = HashMap::new();
     passes.insert("dummy".to_str(), Pass {
         encode: |w,_| w,
         decode: |r,_| r,
@@ -164,7 +165,7 @@ pub fn main() {
         output.write_u8(config.methods.len() as u8).unwrap();
         for met in config.methods.iter() {
             output.write_u8(met.len() as u8).unwrap();
-            output.write_str(*met).unwrap();
+            output.write_str(met.as_slice()).unwrap();
         }
         let mut wsum: Box<Writer> = box output;
         for met in config.methods.iter() {
