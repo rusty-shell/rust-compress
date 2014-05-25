@@ -18,13 +18,13 @@ fn roundtrip(bytes: &[u8]) {
     assert_eq!(bytes.as_slice(), decoded.as_slice());
 }
 
-fn encode_binary(bytes: &[u8], model: &mut super::bin::Model, factor: uint) -> Vec<u8> {
+fn encode_binary(bytes: &[u8], model: &mut super::bin::Model) -> Vec<u8> {
     let mut encoder = super::Encoder::new(MemWriter::new());
     for &byte in bytes.iter() {
         for i in range(0,8) {
             let bit = (byte & (1<<i)) != 0;
             encoder.encode(bit, model).unwrap();
-            model.update(bit, factor);
+            model.update(bit);
         }
     }
     let (writer, err) = encoder.finish();
@@ -32,16 +32,16 @@ fn encode_binary(bytes: &[u8], model: &mut super::bin::Model, factor: uint) -> V
     writer.unwrap()
 }
 
-fn roundtrip_binary(bytes: &[u8], factor: uint) {
-    let mut bm = super::bin::Model::new_flat(super::RANGE_DEFAULT_THRESHOLD >> 3);
-    let output = encode_binary(bytes, &mut bm, factor);
+fn roundtrip_binary(bytes: &[u8], factor: u32) {
+    let mut bm = super::bin::Model::new_flat(super::RANGE_DEFAULT_THRESHOLD >> 3, factor);
+    let output = encode_binary(bytes, &mut bm);
     bm.reset_flat();
     let mut decoder = super::Decoder::new(BufReader::new(output.as_slice()));
     for &byte in bytes.iter() {
         let mut value = 0u8;
         for i in range(0,8) {
             let bit = decoder.decode(&bm).unwrap();
-            bm.update(bit, factor);
+            bm.update(bit);
             value += (bit as u8)<<i;
         }
         assert_eq!(value, byte);
@@ -87,15 +87,13 @@ fn roundtrip_term(bytes1: &[u8], bytes2: &[u8]) {
 
 fn roundtrip_proxy(bytes: &[u8]) {
     // prepare data
-    let factor0 = 3;
-    let factor1 = 5;
     let update0 = 10;
     let update1 = 5;
     let threshold = super::RANGE_DEFAULT_THRESHOLD >> 3;
     let mut t0 = super::table::Model::new_flat(16, threshold);
     let mut t1 = super::table::Model::new_flat(16, threshold);
-    let mut b0 = super::bin::Model::new_flat(threshold);
-    let mut b1 = super::bin::Model::new_flat(threshold);
+    let mut b0 = super::bin::Model::new_flat(threshold, 3);
+    let mut b1 = super::bin::Model::new_flat(threshold, 5);
     // encode (high 4 bits with the proxy table, low 4 bits with the proxy binary)
     let mut encoder = super::Encoder::new(MemWriter::new());
     for &byte in bytes.iter() {
@@ -112,8 +110,8 @@ fn roundtrip_proxy(bytes: &[u8]) {
                 let proxy = super::bin::SumProxy::new(1, &b0, 1, &b1, 1);
                 encoder.encode(bit, &proxy).unwrap();
             }
-            b0.update(bit, factor0);
-            b1.update(bit, factor1);
+            b0.update(bit);
+            b1.update(bit);
         }
     }
     let (writer, err) = encoder.finish();
@@ -139,12 +137,47 @@ fn roundtrip_proxy(bytes: &[u8]) {
                 decoder.decode(&proxy).unwrap()
             };
             value += (bit as u8)<<i;
-            b0.update(bit, factor0);
-            b1.update(bit, factor1);
+            b0.update(bit);
+            b1.update(bit);
         }
         assert_eq!(value, byte);
     }
 }
+
+fn roundtrip_apm(bytes: &[u8]) {
+    let mut bit = super::apm::Bit::new_equal();
+    let mut gate = super::apm::Gate::new();
+    let mut encoder = super::Encoder::new(MemWriter::new());
+    for b8 in bytes.iter() {
+        for i in range(0,8) {
+            let b1 = (*b8>>i) & 1 != 0;
+            let (bit_new, coords) = gate.pass(&bit);
+            encoder.encode(b1, &bit_new).unwrap();
+            bit.update(b1, 10, 0);
+            gate.update(b1, coords, 10, 0);
+        }
+    }
+    let (writer, err) = encoder.finish();
+    err.unwrap();
+    let output = writer.unwrap();
+    bit = super::apm::Bit::new_equal();
+    gate = super::apm::Gate::new();
+    let mut decoder = super::Decoder::new(BufReader::new(output.as_slice()));
+    for b8 in bytes.iter() {
+        let mut decoded = 0u8;
+        for i in range(0,8) {
+            let (bit_new, coords) = gate.pass(&bit);
+            let b1 = decoder.decode(&bit_new).unwrap();
+            if b1 {
+                decoded += 1<<i;
+            }
+            bit.update(b1, 10, 0);
+            gate.update(b1, coords, 10, 0);
+        }
+        assert_eq!(decoded, *b8);
+    }
+}
+
 
 #[test]
 fn roundtrips() {
@@ -168,6 +201,11 @@ fn roundtrips_term() {
 fn roundtrips_proxy() {
     roundtrip_proxy(bytes!("abracadabra"));
     roundtrip_proxy(TEXT_INPUT);
+}
+
+#[test]
+fn roundtrips_apm() {
+    roundtrip_apm(bytes!("abracadabra"));
 }
 
 #[bench]
