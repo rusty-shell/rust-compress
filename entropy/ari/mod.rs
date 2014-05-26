@@ -107,14 +107,15 @@ impl RangeEncoder {
     /// Process a given interval [from/total,to/total) into the current range
     /// write into the output slice, and return the number of symbols produced
     pub fn process(&mut self, total: Border, from: Border, to: Border, output: &mut [Symbol]) -> uint {
-        let range = (self.hai - self.low) / total;
+        debug_assert!(from<to && to<=total);
+        let old_range = self.hai - self.low;
+        let range = old_range / total;
         debug_assert!(range>0, "RangeCoder range is too narrow [{}-{}) for the total {}",
             self.low, self.hai, total);
         debug!("\t\tProcessing [{}-{})/{} with range {}", from, to, total, range);
-        debug_assert!(from < to);
         let mut lo = self.low + range*from;
         let mut hi = self.low + range*to;
-        self.bits_lost_on_division += RangeEncoder::count_bits(range*total, self.hai-self.low);
+        self.bits_lost_on_division += RangeEncoder::count_bits(range*total, old_range);
         let mut num_shift = 0u;
         loop {
             if (lo^hi) & BORDER_SYMBOL_MASK != 0 {
