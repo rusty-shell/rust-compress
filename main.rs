@@ -22,14 +22,14 @@ use compress::entropy::ari;
 static MAGIC    : u32   = 0x73632172;   //=r!cs
 
 struct Config {
-    exe_name: StrBuf,
-    methods: Vec<StrBuf>,
+    exe_name: String,
+    methods: Vec<String>,
     block_size: uint,
     decompress: bool,
 }
 
 impl Config {
-    fn query(args: &[StrBuf]) -> Config {
+    fn query(args: &[String]) -> Config {
         let mut cfg = Config {
             exe_name: args[0].clone(),
             methods: Vec::new(),
@@ -60,13 +60,13 @@ impl Config {
 struct Pass {
     encode: |Box<Writer>, &Config|: 'static -> Box<io::Writer>,
     decode: |Box<Reader>, &Config|: 'static -> Box<io::Reader>,
-    info: StrBuf,
+    info: String,
 }
 
 
 /// main entry point
 pub fn main() {
-    let mut passes: HashMap<StrBuf,Pass> = HashMap::new();
+    let mut passes: HashMap<String,Pass> = HashMap::new();
     passes.insert("dummy".to_str(), Pass {
         encode: |w,_| w,
         decode: |r,_| r,
