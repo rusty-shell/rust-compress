@@ -1,6 +1,7 @@
-#![crate_id = "compress"]
+#![crate_id = "compress#0.1"]
 #![crate_type = "rlib"]
 #![crate_type = "dylib"]
+#![comment = "Various compression algorithms written in rust."]
 #![deny(warnings, missing_doc)]
 #![feature(macro_rules, phase)]
 
@@ -10,7 +11,14 @@
 #[cfg(test)] extern crate rand;
 #[cfg(test)] extern crate test;
 
-mod adler32;
+/// Public exports
+pub use Adler32 = self::checksum::adler::State32;
+
+/// Checksum algorithms
+// http://en.wikipedia.org/wiki/Checksum
+pub mod checksum {
+    pub mod adler;
+}
 
 pub mod bwt;
 pub mod flate;
@@ -20,5 +28,5 @@ pub mod zlib;
 /// Entropy coder family
 // http://en.wikipedia.org/wiki/Entropy_encoding
 pub mod entropy {
-	pub mod ari;
+    pub mod ari;
 }

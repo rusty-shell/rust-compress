@@ -20,13 +20,13 @@
 
 use std::io;
 
-use adler32;
+use Adler32;
 use flate;
 
 /// Structure used to decode a ZLIB-encoded stream. The wrapped stream can be
 /// re-acquired through the unwrap() method.
 pub struct Decoder<R> {
-    hash: adler32::State,
+    hash: Adler32,
     inner: flate::Decoder<R>,
     read_header: bool,
 }
@@ -37,7 +37,7 @@ impl<R: Reader> Decoder<R> {
     /// reader can be re-acquired through the `unwrap` method.
     pub fn new(r: R) -> Decoder<R> {
         Decoder {
-            hash: adler32::State::new(),
+            hash: Adler32::new(),
             inner: flate::Decoder::new(r),
             read_header: false,
         }
