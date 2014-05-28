@@ -1,6 +1,6 @@
 RUSTC = rustc
 RUSTDOC = rustdoc
-RUSTFLAGS = -O
+RUSTFLAGS = -O -D warnings
 BUILDDIR = build
 COMPRESS = $(BUILDDIR)/$(filter-out %.dylib,\
 	      $(shell $(RUSTC) --crate-file-name lib.rs))
