@@ -50,7 +50,7 @@ impl Config {
                     None => println!("Warning: unrecognized option: {}", arg.as_slice()),
                 }
             }else {
-                cfg.methods.push(arg.to_owned());
+                cfg.methods.push(arg.to_string());
             }
         }
         cfg
@@ -135,10 +135,10 @@ pub fn main() {
             },
             _ => () //OK
         }
-        let methods = Vec::from_fn( input.read_u8().unwrap() as uint, |_| {
+        let methods = Vec::from_fn(input.read_u8().unwrap() as uint, |_| {
             let len = input.read_u8().unwrap() as uint;
             let bytes = input.read_exact(len).unwrap();
-            str::from_utf8(bytes.as_slice()).unwrap().to_owned()
+            str::from_utf8(bytes.as_slice()).unwrap().to_string()
         });
         let mut rsum: Box<Reader> = box input;
         for met in methods.iter() {

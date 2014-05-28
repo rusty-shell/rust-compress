@@ -7,7 +7,10 @@
 
 //! dox (placeholder)
 
-#[phase(syntax, link)] extern crate log;
+#[phase(syntax, link)]
+extern crate log;
+extern crate debug;
+
 #[cfg(test)] extern crate rand;
 #[cfg(test)] extern crate test;
 
