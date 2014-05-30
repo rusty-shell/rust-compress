@@ -471,11 +471,11 @@ impl<R: Reader> Reader for Decoder<R> {
 #[cfg(test)]
 #[allow(warnings)]
 mod test {
-    use rand;
-    use test;
     use std::io::{BufReader, MemWriter};
-    use super::{Decoder};
+    use std::rand;
     use std::str;
+    use super::{Decoder};
+    use test;
 
     // The input data for these tests were all generated from the zpipe.c
     // program found at http://www.zlib.net/zpipe.c and the zlib format has an

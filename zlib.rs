@@ -127,11 +127,11 @@ impl<R: Reader> Reader for Decoder<R> {
 #[cfg(test)]
 #[allow(warnings)]
 mod test {
-    use rand;
-    use test;
     use std::io::{BufReader, MemWriter};
-    use super::{Decoder};
+    use std::rand;
     use std::str;
+    use super::{Decoder};
+    use test;
 
     fn test_decode(input: &[u8], output: &[u8]) {
         let mut d = Decoder::new(BufReader::new(input));

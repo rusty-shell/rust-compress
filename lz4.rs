@@ -406,10 +406,10 @@ impl<W: Writer> Writer for Encoder<W> {
 
 #[cfg(test)]
 mod test {
-    use rand;
-    use test;
     use std::io::{BufReader, MemWriter};
+    use std::rand;
     use super::{Decoder, Encoder};
+    use test;
 
     fn test_decode(input: &[u8], output: &[u8]) {
         let mut d = Decoder::new(BufReader::new(input));
