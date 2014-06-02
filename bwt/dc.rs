@@ -34,7 +34,7 @@ pub static TotalSymbols: uint = 0x100;
 
 /// Distance coding context
 /// Has all the information potentially needed by the underlying coding model
-#[deriving(Eq, Show)]
+#[deriving(PartialEq, Eq, Show)]
 pub struct Context {
     /// current symbol
     pub symbol: Symbol,
