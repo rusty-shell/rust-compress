@@ -11,9 +11,8 @@
 
 #[phase(syntax, link)] extern crate log;
 extern crate compress;
-extern crate collections;
 
-use collections::HashMap;
+use std::collections::HashMap;
 use std::{io, os, str};
 use compress::{bwt, lz4};
 use compress::entropy::ari;
