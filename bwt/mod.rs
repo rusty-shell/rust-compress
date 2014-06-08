@@ -295,7 +295,7 @@ fn decode_minimal(input: &[Symbol], origin: uint, output: &mut [Symbol]) {
     range(0,n).fold(origin, |i,j| {
         let ch = input[i];
         output[n-j-1] = ch;
-        let offset = input.slice_to(i).iter().count(|&k| k==ch);
+        let offset = input.slice_to(i).iter().filter(|&k| *k==ch).count();
         radix.freq[ch as uint] + offset
     });
 }
