@@ -129,7 +129,6 @@ impl<W: Writer> Writer for Encoder<W> {
 pub struct Decoder<R> {
     r: R,
     mtf: MTF,
-    eof: bool,
 }
 
 impl<R> Decoder<R> {
@@ -140,7 +139,6 @@ impl<R> Decoder<R> {
         Decoder {
             r: r,
             mtf: mtf,
-            eof: false,
         }
     }
 

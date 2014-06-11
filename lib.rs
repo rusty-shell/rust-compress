@@ -7,7 +7,7 @@
 
 //! dox (placeholder)
 
-#[phase(syntax, link)]
+#[phase(plugin, link)]
 extern crate log;
 extern crate debug;
 

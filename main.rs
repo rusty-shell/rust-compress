@@ -9,7 +9,7 @@
 //! echo -n "abracadabra" | ./app bwt | xxd
 //! echo "banana" | ./app bwt | ./app -d
 
-#[phase(syntax, link)] extern crate log;
+#[phase(plugin, link)] extern crate log;
 extern crate compress;
 
 use std::collections::HashMap;
