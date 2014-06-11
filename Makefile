@@ -3,7 +3,7 @@ RUSTDOC = rustdoc
 RUSTFLAGS = -D warnings
 BUILDDIR = build
 COMPRESS = $(BUILDDIR)/$(filter-out %.dylib,\
-	      $(shell $(RUSTC) --crate-file-name lib.rs))
+	      $(shell $(RUSTC) --crate-file-name lib.rs --crate-type=rlib))
 APP = $(BUILDDIR)/$(shell $(RUSTC) --crate-file-name main.rs)
 
 LIBTEST = $(BUILDDIR)/test/$(shell $(RUSTC) --crate-file-name --test lib.rs)
