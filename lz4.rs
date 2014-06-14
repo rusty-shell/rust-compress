@@ -50,9 +50,10 @@ impl<'a> BlockDecoder<'a> {
             {
                 let len = self.length(code >> 4);
                 debug!("consume len {}", len);
-                self.grow_output(self.end + len);
-                slice::bytes::copy_memory(self.output.mut_slice_from(self.end),
-                                        self.input.slice(self.cur, self.cur + len));
+                let end = self.end;
+                self.grow_output(end + len);
+                slice::bytes::copy_memory(self.output.mut_slice_from(end),
+                                          self.input.slice(self.cur, self.cur + len));
                 self.end += len;
                 self.cur += len;
             }
@@ -101,9 +102,10 @@ impl<'a> BlockDecoder<'a> {
 
     #[inline]
     fn cp(&mut self, len: uint, decr: uint) {
-        self.grow_output(self.end + len);
+        let end = self.end;
+        self.grow_output(end + len);
         for i in range(0, len) {
-            *self.output.get_mut(self.end + i) = *self.output.get(self.start + i);
+            *self.output.get_mut(end + i) = *self.output.get(self.start + i);
         }
 
         self.end += len;
