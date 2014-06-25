@@ -1,8 +1,9 @@
 [project]
 
 name = "compress"
-version = "0.1.0"
-authors = ["Alex Crichton", "Dzmitry Malyshau"]
+version = "0.0.1"
+authors = ["Alex Crichton <alex@alexcrichton.com>",
+           "Dzmitry Malyshau <kvarkus@gmail.com>"]
 
 [[lib]]
 
