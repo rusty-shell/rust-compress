@@ -20,7 +20,7 @@ pub type WideProbability = i16;
 static BIN_WEIGHT_BITS: uint = 8;
 static BIN_WEIGHT_TOTAL: uint = 1<<BIN_WEIGHT_BITS;
 static FLAT_BITS: FlatProbability = 12;
-static FLAT_TOTAL: int = 1<<FLAT_BITS;
+static FLAT_TOTAL: int = 1<<(FLAT_BITS as uint);
 static WIDE_BITS: uint = 12;
 static WIDE_OFFSET: WideProbability = 1<<(WIDE_BITS-1);
 //static WIDE_TOTAL: int = (1<<WIDE_BITS)+1;
@@ -37,14 +37,14 @@ impl Bit {
     pub fn new_equal() -> Bit {
         Bit(FLAT_TOTAL as FlatProbability >> 1)
     }
-    
+
     /// Return flat probability
     #[inline]
     pub fn to_flat(&self) -> FlatProbability {
         let Bit(fp) = *self;
         fp
     }
-    
+
     /// Return wide probability
     #[inline]
     pub fn to_wide(&self) -> WideProbability {
@@ -54,13 +54,13 @@ impl Bit {
         let wp = (d * WIDE_OFFSET as f32).to_i16().unwrap();
         wp
     }
-    
+
     /// Construct from flat probability
     #[inline]
     pub fn from_flat(fp: FlatProbability) -> Bit {
         Bit(fp)
     }
-    
+
     /// Construct from wide probability
     #[inline]
     pub fn from_wide(wp: WideProbability) -> Bit {
@@ -70,19 +70,19 @@ impl Bit {
         let fp = (p * FLAT_TOTAL as f32).to_u16().unwrap();
         Bit(fp)
     }
-    
+
     /// Mutate for better zeroes
     pub fn update_zero(&mut self, rate: int, bias: int) {
         let &Bit(ref mut fp) = self;
         let one = FLAT_TOTAL - bias - (*fp as int);
-        *fp += (one >> rate) as FlatProbability;
+        *fp += (one >> (rate as uint)) as FlatProbability;
     }
-    
+
     /// Mutate for better ones
     pub fn update_one(&mut self, rate: int, bias: int) {
         let &Bit(ref mut fp) = self;
         let zero = (*fp as int) - bias;
-        *fp -= (zero >> rate) as FlatProbability;
+        *fp -= (zero >> (rate as uint)) as FlatProbability;
     }
 
     /// Mutate for a given value
@@ -152,7 +152,7 @@ impl Gate {
         let (fp, index) = self.pass_wide(bit.to_wide());
         (Bit::from_flat(fp), index)
     }
-    
+
     /// Pass a wide probability on input, usable when
     /// you mix it linearly beforehand (libbsc does that)
     pub fn pass_wide(&self, wp: WideProbability) -> (FlatProbability, BinCoords) {
@@ -165,16 +165,16 @@ impl Gate {
         let fp = (sum >> BIN_WEIGHT_BITS) as FlatProbability;
         (fp, (index, weight))
     }
-    
+
     //TODO: weight update ratio & bias as well
-    
+
     /// Mutate for better zeroes
     pub fn update_zero(&mut self, bc: BinCoords, rate: int, bias: int) {
         let (index, _) = bc;
         self.map[index+0].update_zero(rate, bias);
         self.map[index+1].update_zero(rate, bias);
     }
-    
+
     /// Mutate for better ones
     pub fn update_one(&mut self, bc: BinCoords, rate: int, bias: int) {
         let (index, _) = bc;

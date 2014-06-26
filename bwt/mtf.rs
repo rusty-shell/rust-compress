@@ -15,7 +15,7 @@ use std::io;
 use compress::bwt::mtf;
 
 // Encode a stream of bytes
-let bytes = bytes!("abracadabra");
+let bytes = b"abracadabra";
 let mut e = mtf::Encoder::new(io::MemWriter::new());
 e.write(bytes).unwrap();
 let encoded = e.finish().unwrap();
@@ -184,8 +184,8 @@ mod test {
 
     #[test]
     fn some_roundtrips() {
-        roundtrip(bytes!("teeesst_mtf"));
-        roundtrip(bytes!(""));
+        roundtrip(b"teeesst_mtf");
+        roundtrip(b"");
         roundtrip(include_bin!("../data/test.txt"));
     }
 

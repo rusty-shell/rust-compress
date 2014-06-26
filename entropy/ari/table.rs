@@ -148,7 +148,7 @@ impl<'a> super::Model<uint> for SumProxy<'a> {
     fn get_range(&self, value: uint) -> (Border,Border) {
         let (lo0, hi0) = self.first.get_range(value);
         let (lo1, hi1) = self.second.get_range(value);
-        let (wa, wb, ws) = (self.w_first, self.w_second, self.w_shift);
+        let (wa, wb, ws) = (self.w_first, self.w_second, self.w_shift as uint);
         ((wa*lo0 + wb*lo1)>>ws, (wa*hi0 + wb*hi1)>>ws)
     }
 
@@ -162,7 +162,7 @@ impl<'a> super::Model<uint> for SumProxy<'a> {
         while {  hi = lo +
                 (self.w_first * (self.first.get_frequencies()[value] as Border) +
                 self.w_second * (self.second.get_frequencies()[value] as Border)) >>
-                self.w_shift;
+                (self.w_shift as uint);
                 hi <= offset } {
             lo = hi;
             value += 1;
@@ -173,7 +173,7 @@ impl<'a> super::Model<uint> for SumProxy<'a> {
     fn get_denominator(&self) -> Border {
         (self.w_first * self.first.get_denominator() +
             self.w_second * self.second.get_denominator()) >>
-            self.w_shift
+            (self.w_shift as uint)
     }
 }
 

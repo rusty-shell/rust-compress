@@ -78,7 +78,7 @@ impl HuffmanTree {
     fn construct(lens: &[u16]) -> io::IoResult<HuffmanTree> {
         let mut tree = HuffmanTree {
             count: [0, ..MAXBITS + 1],
-            symbol: [0, ..MAXCODES],
+            symbol: [0, ..MAXCODES as uint],
         };
         // Collect the lengths of all symbols
         for len in lens.iter() {
@@ -405,7 +405,7 @@ impl<R: Reader> Decoder<R> {
 
         // Decode all of the length and distance codes in one go, we'll
         // partition them into two huffman trees later
-        let mut lengths = [0, ..MAXCODES];
+        let mut lengths = [0, ..MAXCODES as uint];
         let mut i = 0;
         while i < hlit + hdist {
             let symbol = try!(tree.decode(self));

@@ -217,7 +217,7 @@ pub fn compute_inversion_table<SUF: NumCast>(input: &[Symbol], origin: uint, tab
     radix.gather(input);
     radix.accumulate();
 
-    table[radix.place(input[origin])] = NumCast::from(0).unwrap();
+    table[radix.place(input[origin])] = NumCast::from(0i).unwrap();
     for (i,&ch) in input.slice_to(origin).iter().enumerate() {
         table[radix.place(ch)] = NumCast::from(i+1).unwrap();
     }
@@ -528,14 +528,14 @@ mod test {
 
     #[test]
     fn some_roundtrips() {
-        roundtrip(bytes!("test"), true);
-        roundtrip(bytes!(""), true);
+        roundtrip(b"test", true);
+        roundtrip(b"", true);
         roundtrip(include_bin!("../data/test.txt"), true);
     }
 
     #[test]
     fn decode_minimal() {
-        roundtrip(bytes!("abracadabra"), false);
+        roundtrip(b"abracadabra", false);
     }
 
     #[bench]

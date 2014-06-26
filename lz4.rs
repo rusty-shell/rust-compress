@@ -481,8 +481,8 @@ mod test {
 
     #[test]
     fn some_roundtrips() {
-        roundtrip(bytes!("test"));
-        roundtrip(bytes!(""));
+        roundtrip(b"test");
+        roundtrip(b"");
         roundtrip(include_bin!("data/test.txt"));
     }
 

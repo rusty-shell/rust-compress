@@ -12,7 +12,7 @@ http://www.data-compression.info/Algorithms/DC/
 ```rust
 use compress::bwt::dc;
 
-let bytes = bytes!("abracadabra");
+let bytes = b"abracadabra";
 let distances = dc::encode_simple::<uint>(bytes);
 let decoded = dc::decode_simple(bytes.len(), distances.as_slice());
 ```
@@ -147,7 +147,7 @@ pub fn encode<'a, 'b, D: Clone + Copy + Eq + NumCast>(input: &'a [Symbol], dista
 /// Encode version with "batteries included" for quick testing
 pub fn encode_simple<D: Clone + Copy + Eq + NumCast>(input: &[Symbol]) -> Vec<D> {
     let n = input.len();
-    let mut raw_dist: Vec<D> = Vec::from_elem(n, NumCast::from(0).unwrap());
+    let mut raw_dist: Vec<D> = Vec::from_elem(n, NumCast::from(0i).unwrap());
     let mut eniter = encode(input, raw_dist.as_mut_slice(), &mut MTF::new());
     let init: Vec<D> = Vec::from_fn(TotalSymbols, |i| NumCast::from(eniter.get_init()[i]).unwrap());
     init.iter().map(|d| d.clone()).chain(eniter.by_ref().map(|(d,_)| d)).collect()
@@ -282,14 +282,14 @@ mod test {
 
     #[test]
     fn roundtrips() {
-        roundtrip(bytes!("teeesst_dc"));
-        roundtrip(bytes!(""));
+        roundtrip(b"teeesst_dc");
+        roundtrip(b"");
         roundtrip(include_bin!("../data/test.txt"));
     }
 
     #[test]
     fn roundtrips_context() {
-        roundtrip_ctx(bytes!("teeesst_dc"));
-        roundtrip_ctx(bytes!("../data/test.txt"));
+        roundtrip_ctx(b"teeesst_dc");
+        roundtrip_ctx(b"../data/test.txt");
     }
 }
