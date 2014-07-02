@@ -7,10 +7,10 @@ install:
   - sudo apt-get update
   - sudo apt-get install cargo
 script:
-  - make
-  - make check
-  - make docs
   - cargo build
+  - cargo test
+  - rustdoc --test lib.rs -L target
+  - rustdoc lib.rs
 after_script:
   - curl http://www.rust-ci.org/artifacts/put?t=$RUSTCI_TOKEN | sh
 env:
