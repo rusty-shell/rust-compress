@@ -1,4 +1,4 @@
-#![crate_name = "compress#0.1"]
+#![crate_name = "compress"]
 #![crate_type = "rlib"]
 #![crate_type = "dylib"]
 #![comment = "Various compression algorithms written in rust."]
