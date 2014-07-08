@@ -1,7 +1,3 @@
-#![crate_name = "compress"]
-#![crate_type = "rlib"]
-#![crate_type = "dylib"]
-#![comment = "Various compression algorithms written in rust."]
 #![deny(missing_doc)]
 #![feature(macro_rules, phase)]
 

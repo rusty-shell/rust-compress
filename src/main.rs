@@ -1,4 +1,3 @@
-#![crate_id = "app"]
 #![crate_type = "bin"]
 #![deny(warnings, missing_doc)]
 #![feature(macro_rules, phase)]
