@@ -65,37 +65,37 @@ struct Pass {
 /// main entry point
 pub fn main() {
     let mut passes: HashMap<String,Pass> = HashMap::new();
-    passes.insert("dummy".to_str(), Pass {
+    passes.insert("dummy".to_string(), Pass {
         encode: |w,_| w,
         decode: |r,_| r,
-        info: "pass-through".to_str(),
+        info: "pass-through".to_string(),
     });
-    passes.insert("ari".to_str(), Pass {
+    passes.insert("ari".to_string(), Pass {
         encode: |w,_c| {
             box ari::ByteEncoder::new(w) as Box<Writer>
         },
         decode: |r,_c| {
             box ari::ByteDecoder::new(r) as Box<Reader>
         },
-        info: "Adaptive arithmetic byte coder".to_str(),
+        info: "Adaptive arithmetic byte coder".to_string(),
     });
-    passes.insert("bwt".to_str(), Pass {
+    passes.insert("bwt".to_string(), Pass {
         encode: |w,c| {
             box bwt::Encoder::new(w, c.block_size) as Box<Writer>
         },
         decode: |r,_c| {
             box bwt::Decoder::new(r, true) as Box<Reader>
         },
-        info: "Burrows-Wheeler Transformation".to_str(),
+        info: "Burrows-Wheeler Transformation".to_string(),
     });
-    passes.insert("mtf".to_str(), Pass {
+    passes.insert("mtf".to_string(), Pass {
         encode: |w,_c| {
             box bwt::mtf::Encoder::new(w) as Box<Writer>
         },
         decode: |r,_c| {
             box bwt::mtf::Decoder::new(r) as Box<Reader>
         },
-        info: "Move-To-Front Transformation".to_str(),
+        info: "Move-To-Front Transformation".to_string(),
     });
     /* // looks like we are missing the encoder implementation
     passes.insert(~"flate", Pass {
@@ -107,14 +107,14 @@ pub fn main() {
         },
         info: ~"Standardized Ziv-Lempel + Huffman variant",
     });*/
-    passes.insert("lz4".to_str(), Pass {
+    passes.insert("lz4".to_string(), Pass {
         encode: |w,_c| {
             box lz4::Encoder::new(w) as Box<Writer>
         },
         decode: |r,_c| { // LZ4 decoder seem to work
             box lz4::Decoder::new(r) as Box<Reader>
         },
-        info: "Ziv-Lempel derivative, focused at speed".to_str(),
+        info: "Ziv-Lempel derivative, focused at speed".to_string(),
     });
 
     let config = Config::query(os::args().as_slice());
@@ -128,7 +128,7 @@ pub fn main() {
                 return
             },
             Err(e) => {
-                error!("Unable to read input: {}", e.to_str());
+                error!("Unable to read input: {}", e.to_string());
                 return
             },
             _ => () //OK
