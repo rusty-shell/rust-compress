@@ -1,3 +1,4 @@
+#![crate_name = "compress"]
 #![deny(missing_doc)]
 #![feature(macro_rules, phase)]
 
