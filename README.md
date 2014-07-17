@@ -2,6 +2,9 @@
 
 [![Build Status](https://travis-ci.org/alexcrichton/rust-compress.png?branch=master)](https://travis-ci.org/alexcrichton/rust-compress)
 
+**NOTE: This is not a production-quality library, it is a proof of concept. This
+library mainly contains *decoders*, not *encoders*.**
+
 This repository aims to house various implementations of compression algorithms,
 all written in rust. This is still very much a work in progress.
 
