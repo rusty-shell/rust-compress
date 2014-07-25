@@ -314,11 +314,11 @@ impl<R: Reader> Decoder<R> {
                     let min = cmp::min(dist, len);
                     let start = self.block.len();
                     for _ in range(0, min) {
-                        self.block.push(*self.output.get(finger));
+                        self.block.push(self.output[finger]);
                         finger = (finger + 1) % HISTORY;
                     }
                     for i in range(min, len) {
-                        let b = *self.block.get(start + i - min);
+                        let b = self.block[start + i - min];
                         self.block.push(b);
                     }
                 }

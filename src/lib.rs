@@ -1,5 +1,5 @@
 #![crate_name = "compress"]
-#![deny(missing_doc)]
+#![deny(missing_doc, warnings)]
 #![feature(macro_rules, phase)]
 
 //! dox (placeholder)

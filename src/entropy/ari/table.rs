@@ -97,7 +97,7 @@ impl Model {
 impl super::Model<uint> for Model {
     fn get_range(&self, value: uint) -> (Border,Border) {
         let lo = self.table.slice_to(value).iter().fold(0, |u,&f| u+(f as Border));
-        (lo, lo + (*self.table.get(value) as Border))
+        (lo, lo + (self.table[value] as Border))
     }
 
     fn find_value(&self, offset: Border) -> (uint,Border,Border) {
@@ -107,7 +107,7 @@ impl super::Model<uint> for Model {
         let mut value = 0u;
         let mut lo = 0 as Border;
         let mut hi;
-        while {hi=lo+(*self.table.get(value) as Border); hi} <= offset {
+        while {hi=lo+(self.table[value] as Border); hi} <= offset {
             lo = hi;
             value += 1;
         }
