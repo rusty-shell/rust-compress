@@ -1,5 +1,6 @@
 # Rust Compresion
 
+[Documentation](http://alexcrichton.com/rust-compress/compress/index.html)
 [![Build Status](https://travis-ci.org/alexcrichton/rust-compress.png?branch=master)](https://travis-ci.org/alexcrichton/rust-compress)
 
 **NOTE: This is not a production-quality library, it is a proof of concept. This
