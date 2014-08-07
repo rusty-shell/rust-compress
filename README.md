@@ -1,7 +1,8 @@
 # Rust Compresion
 
-[Documentation](http://alexcrichton.com/rust-compress/compress/index.html)
 [![Build Status](https://travis-ci.org/alexcrichton/rust-compress.png?branch=master)](https://travis-ci.org/alexcrichton/rust-compress)
+
+[Documentation](http://alexcrichton.com/rust-compress/compress/index.html)
 
 **NOTE: This is not a production-quality library, it is a proof of concept. This
 library mainly contains *decoders*, not *encoders*.**
@@ -12,7 +13,7 @@ all written in rust. This is still very much a work in progress.
 ```
 git clone https://github.com/alexcrichton/rust-compress
 cd rust-compress
-make
+cargo build
 ```
 
 ### Implemented Algorithms
