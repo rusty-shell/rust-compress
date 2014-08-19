@@ -68,7 +68,7 @@ struct HuffmanTree {
 
     /// Symbols in this huffman tree in sorted order. This preserves the
     /// original huffman codes
-    pub symbol: [u16, ..MAXCODES],
+    pub symbol: [u16, ..MAXCODES as uint],
 }
 
 impl HuffmanTree {

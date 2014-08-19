@@ -12,7 +12,7 @@ extern crate debug;
 #[cfg(test)] extern crate test;
 
 /// Public exports
-pub use Adler32 = self::checksum::adler::State32;
+pub use self::checksum::adler::State32 as Adler32;
 
 /// Checksum algorithms
 // http://en.wikipedia.org/wiki/Checksum

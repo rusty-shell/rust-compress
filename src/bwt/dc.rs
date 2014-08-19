@@ -25,7 +25,7 @@ Thanks to Edgar Binder for inventing DC!
 */
 
 use std::{io, iter};
-use vec = std::slice;
+use std::slice as vec;
 use super::mtf::MTF;
 
 pub type Symbol = u8;
