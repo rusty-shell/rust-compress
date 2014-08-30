@@ -179,7 +179,7 @@ impl<'a, SUF> TransformIterator<'a, SUF> {
     }
 }
 
-impl<'a, SUF: ToPrimitive> Iterator<Symbol> for TransformIterator<'a, SUF> {
+impl<'a, SUF: ToPrimitive + 'a> Iterator<Symbol> for TransformIterator<'a, SUF> {
     fn next(&mut self) -> Option<Symbol> {
         self.suf_iter.next().map(|(i,p)| {
             if p.to_uint().unwrap() == 0 {
@@ -230,7 +230,7 @@ pub fn compute_inversion_table<SUF: NumCast>(input: &[Symbol], origin: uint, tab
 
 /// An iterator over inverse BWT
 /// Run time: O(N), memory: N words (table)
-pub struct InverseIterator<'a, SUF> {
+pub struct InverseIterator<'a, SUF: 'a> {
     input      : &'a [Symbol],
     table      : &'a [SUF],
     origin     : uint,

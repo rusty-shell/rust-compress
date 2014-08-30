@@ -83,7 +83,9 @@ impl<'a, 'b, D: NumCast> EncodeIterator<'a,'b,D> {
     }
 }
 
-impl<'a, 'b, D: Clone + Eq + NumCast> Iterator<(D,Context)> for EncodeIterator<'a,'b,D> {
+impl<'a, 'b, D> Iterator<(D,Context)> for EncodeIterator<'a,'b,D>
+    where D: Clone + Eq + NumCast + 'b
+{
     fn next(&mut self) -> Option<(D,Context)> {
         let filler: D = NumCast::from(self.size).unwrap();
         self.data.find(|&(_,(_,d))| *d != filler).map(|(i,(sym,d))| {

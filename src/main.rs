@@ -56,8 +56,8 @@ impl Config {
 }
 
 struct Pass {
-    encode: |Box<Writer>, &Config|: 'static -> Box<io::Writer>,
-    decode: |Box<Reader>, &Config|: 'static -> Box<io::Reader>,
+    encode: |Box<Writer + 'static>, &Config|: 'static -> Box<Writer + 'static>,
+    decode: |Box<Reader + 'static>, &Config|: 'static -> Box<Reader + 'static>,
     info: String,
 }
 
@@ -72,28 +72,28 @@ pub fn main() {
     });
     passes.insert("ari".to_string(), Pass {
         encode: |w,_c| {
-            box ari::ByteEncoder::new(w) as Box<Writer>
+            box ari::ByteEncoder::new(w) as Box<Writer + 'static>
         },
         decode: |r,_c| {
-            box ari::ByteDecoder::new(r) as Box<Reader>
+            box ari::ByteDecoder::new(r) as Box<Reader + 'static>
         },
         info: "Adaptive arithmetic byte coder".to_string(),
     });
     passes.insert("bwt".to_string(), Pass {
         encode: |w,c| {
-            box bwt::Encoder::new(w, c.block_size) as Box<Writer>
+            box bwt::Encoder::new(w, c.block_size) as Box<Writer + 'static>
         },
         decode: |r,_c| {
-            box bwt::Decoder::new(r, true) as Box<Reader>
+            box bwt::Decoder::new(r, true) as Box<Reader + 'static>
         },
         info: "Burrows-Wheeler Transformation".to_string(),
     });
     passes.insert("mtf".to_string(), Pass {
         encode: |w,_c| {
-            box bwt::mtf::Encoder::new(w) as Box<Writer>
+            box bwt::mtf::Encoder::new(w) as Box<Writer + 'static>
         },
         decode: |r,_c| {
-            box bwt::mtf::Decoder::new(r) as Box<Reader>
+            box bwt::mtf::Decoder::new(r) as Box<Reader + 'static>
         },
         info: "Move-To-Front Transformation".to_string(),
     });
@@ -109,10 +109,10 @@ pub fn main() {
     });*/
     passes.insert("lz4".to_string(), Pass {
         encode: |w,_c| {
-            box lz4::Encoder::new(w) as Box<Writer>
+            box lz4::Encoder::new(w) as Box<Writer + 'static>
         },
         decode: |r,_c| { // LZ4 decoder seem to work
-            box lz4::Decoder::new(r) as Box<Reader>
+            box lz4::Decoder::new(r) as Box<Reader + 'static>
         },
         info: "Ziv-Lempel derivative, focused at speed".to_string(),
     });
