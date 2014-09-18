@@ -55,7 +55,7 @@ impl Model {
 
     /// Reset the table to the flat state
     pub fn reset_flat(&mut self) {
-        for freq in self.table.mut_iter() {
+        for freq in self.table.iter_mut() {
             *freq = 1;
         }
         self.total = self.table.len() as Border;
@@ -81,7 +81,7 @@ impl Model {
         debug!("\tDownscaling frequencies");
         let roundup = (1<<self.cut_shift) - 1;
         self.total = 0;
-        for freq in self.table.mut_iter() {
+        for freq in self.table.iter_mut() {
             // preserve non-zero frequencies to remain positive
             *freq = (*freq+roundup) >> self.cut_shift;
             self.total += *freq as Border;
@@ -255,7 +255,7 @@ impl<R: Reader> Reader for ByteDecoder<R> {
             return Err(io::standard_error(io::EndOfFile))
         }
         let mut amount = 0u;
-        for out_byte in dst.mut_iter() {
+        for out_byte in dst.iter_mut() {
             let value = try!(self.decoder.decode(&self.freq));
             if value == super::SYMBOL_TOTAL {
                 self.is_eof = true;

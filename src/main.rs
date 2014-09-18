@@ -43,7 +43,7 @@ impl Config {
         for arg in args.iter().skip(1) {
 			let slice = arg.as_slice();
             if slice.starts_with("-") {
-                match handlers.mut_iter().find(|&(&k,_)| slice.slice_from(1).starts_with(k)) {
+                match handlers.iter_mut().find(|&(&k,_)| slice.slice_from(1).starts_with(k)) {
                     Some((k,h)) => (*h)(slice.slice_from(1+k.len()), &mut cfg),
                     None => println!("Warning: unrecognized option: {}", arg.as_slice()),
                 }

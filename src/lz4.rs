@@ -52,7 +52,7 @@ impl<'a> BlockDecoder<'a> {
                 debug!("consume len {}", len);
                 let end = self.end;
                 self.grow_output(end + len);
-                slice::bytes::copy_memory(self.output.mut_slice_from(end),
+                slice::bytes::copy_memory(self.output.slice_from_mut(end),
                                           self.input.slice(self.cur, self.cur + len));
                 self.end += len;
                 self.cur += len;
@@ -186,7 +186,7 @@ impl<R: Reader> Decoder<R> {
         }
 
         let mut bits = [0, ..3];
-        try!(self.r.read(bits.mut_slice_to(2)));
+        try!(self.r.read(bits.slice_to_mut(2)));
         let flg = bits[0];
         let bd = bits[1];
 
@@ -305,7 +305,7 @@ impl<R: Reader> Reader for Decoder<R> {
                 }
             }
             let n = cmp::min(amt, self.end - self.start);
-            slice::bytes::copy_memory(dst.mut_slice_from(len - amt),
+            slice::bytes::copy_memory(dst.slice_from_mut(len - amt),
                                     self.output.slice(self.start, self.start + n));
             self.start += n;
             amt -= n;
@@ -457,7 +457,7 @@ mod test {
         let mut out = Vec::new();
         let mut buf = [0u8, ..40];
         loop {
-            match d.read(buf.mut_slice_to(1 + rand::random::<uint>() % 40)) {
+            match d.read(buf.slice_to_mut(1 + rand::random::<uint>() % 40)) {
                 Ok(n) => {
                     out.push_all(buf.slice_to(n));
                 }

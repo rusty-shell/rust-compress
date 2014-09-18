@@ -75,7 +75,7 @@ impl Radix  {
     /// reset counters
     /// allows the struct to be re-used
     pub fn reset(&mut self) {
-        for fr in self.freq.mut_iter()   {
+        for fr in self.freq.iter_mut()   {
             *fr = 0;
         }
     }
@@ -90,7 +90,7 @@ impl Radix  {
     /// build offset table
     pub fn accumulate(&mut self)    {
         let mut n = 0;
-        for freq in self.freq.mut_iter() {
+        for freq in self.freq.iter_mut() {
             let f = *freq;
             *freq = n;
             n += f;
@@ -144,7 +144,7 @@ pub fn compute_suffixes<SUF: NumCast + ToPrimitive>(input: &[Symbol], suf_array:
         if lo == hi {
             continue
         }
-        let slice = suf_array.mut_slice(lo,hi);
+        let slice = suf_array.slice_mut(lo,hi);
         debug!("\tsorting group [{}-{}) for symbol {}", lo, hi, i);
         slice.sort_by(|a,b| {
             iter::order::cmp(
@@ -406,7 +406,7 @@ impl<R: Reader> Reader for Decoder<R> {
             }
             let n = cmp::min(amt, self.output.len() - self.start);
             slice::bytes::copy_memory(
-                dst.mut_slice_from(dst_len - amt),
+                dst.slice_from_mut(dst_len - amt),
                 self.output.slice(self.start, self.start + n)
                 );
             self.start += n;

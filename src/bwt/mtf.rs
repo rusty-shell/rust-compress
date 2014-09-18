@@ -50,7 +50,7 @@ impl MTF {
 
     /// set the order of symbols to be alphabetical
     pub fn reset_alphabetical(&mut self) {
-        for (i,sym) in self.symbols.mut_iter().enumerate() {
+        for (i,sym) in self.symbols.iter_mut().enumerate() {
             *sym = i as Symbol;
         }
     }
@@ -151,7 +151,7 @@ impl<R> Decoder<R> {
 impl<R: Reader> Reader for Decoder<R> {
     fn read(&mut self, dst: &mut [u8]) -> io::IoResult<uint> {
         let mut bytes_read = 0u;
-        for sym in dst.mut_iter() {
+        for sym in dst.iter_mut() {
             let rank = match self.r.read_u8() {
                 Ok(r) => r,
                 Err(io::IoError{kind: io::EndOfFile, ..}) if bytes_read!=0 => break,

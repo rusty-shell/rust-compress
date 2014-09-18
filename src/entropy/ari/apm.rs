@@ -138,7 +138,7 @@ impl Gate {
         let mut g = Gate {
             map: [Bit::new_equal(), ..PORTAL_BINS],
         };
-        for (i,bit) in g.map.mut_iter().enumerate() {
+        for (i,bit) in g.map.iter_mut().enumerate() {
             let rp = (i as f32)/(PORTAL_OFFSET as f32) - 1.0;
             let wp = (rp * (WIDE_OFFSET as f32)).to_i16().unwrap();
             *bit = Bit::from_wide(wp);

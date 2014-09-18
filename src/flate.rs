@@ -212,7 +212,7 @@ impl<R: Reader> Decoder<R> {
             self.output.push_all(self.block.slice(from, from + n));
         } else {
             assert_eq!(self.output.len(), HISTORY);
-            slice::bytes::copy_memory(self.output.mut_slice_from(self.outpos),
+            slice::bytes::copy_memory(self.output.slice_from_mut(self.outpos),
                                     self.block.slice(from, from + n));
         }
         self.outpos += n;
@@ -461,7 +461,7 @@ impl<R: Reader> Reader for Decoder<R> {
             try!(self.block());
         }
         let n = cmp::min(buf.len(), self.block.len() - self.pos);
-        slice::bytes::copy_memory(buf.mut_slice_to(n),
+        slice::bytes::copy_memory(buf.slice_to_mut(n),
                                 self.block.slice(self.pos, self.pos + n));
         self.pos += n;
         Ok(n)
@@ -534,7 +534,7 @@ mod test {
         let mut out = Vec::new();
         let mut buf = [0u8, ..40];
         loop {
-            match d.read(buf.mut_slice_to(1 + rand::random::<uint>() % 40)) {
+            match d.read(buf.slice_to_mut(1 + rand::random::<uint>() % 40)) {
                 Ok(n) => {
                     out.push_all(buf.slice_to(n));
                 }

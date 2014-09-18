@@ -175,7 +175,7 @@ pub fn decode(mut next: [uint,..TotalSymbols], output: &mut [Symbol], mtf: &mut 
     if i<=1 {
         // redundant alphabet case
         let sym = mtf.symbols[0];
-        for out in output.mut_iter()    {
+        for out in output.iter_mut()    {
             *out = sym;
         }
         return Ok(())
@@ -243,7 +243,7 @@ pub fn decode_simple<D: ToPrimitive>(n: uint, distances: &[D]) -> Vec<Symbol> {
             Ok(distances[di-1].to_uint().unwrap())
         }
     }).unwrap();
-    output.move_iter().collect()
+    output.into_iter().collect()
 }
 
 
