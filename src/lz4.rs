@@ -406,6 +406,20 @@ impl<W: Writer> Writer for Encoder<W> {
     }
 }
 
+
+/// Decodes pure LZ4 block into output. Returns count of bytes
+/// processed.
+pub fn decode_block(input: &[u8], output: &mut Vec<u8>) -> uint {
+    let mut b = BlockDecoder {
+        input: input,
+        output: output,
+        cur: 0,
+        start: 0,
+        end: 0
+    };
+    b.decode()
+}
+
 #[cfg(test)]
 mod test {
     use std::io::{BufReader, MemWriter};
