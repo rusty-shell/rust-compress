@@ -30,7 +30,7 @@ use super::mtf::MTF;
 
 pub type Symbol = u8;
 pub type Rank = u8;
-pub static TotalSymbols: uint = 0x100;
+pub static TOTAL_SYMBOLS: uint = 0x100;
 
 /// Distance coding context
 /// Has all the information potentially needed by the underlying coding model
@@ -57,16 +57,16 @@ impl Context {
 
 
 /// DC body iterator, can be used to encode distances
-pub struct EncodeIterator<'a,'b,D> {
-    data: iter::Enumerate<iter::Zip<vec::Items<'a,Symbol>,vec::Items<'b,D>>>,
-    pos: [uint, ..TotalSymbols],
+pub struct EncodeIterator<'a,'b, D: 'b> {
+    data: iter::Enumerate<iter::Zip<vec::Items<'a,Symbol>,vec::Items<'b, D>>>,
+    pos: [uint, ..TOTAL_SYMBOLS],
     last_active: uint,
     size: uint,
 }
 
-impl<'a, 'b, D: NumCast> EncodeIterator<'a,'b,D> {
+impl<'a, 'b, D: NumCast> EncodeIterator<'a,'b, D> {
     /// create a new encode iterator
-    pub fn new(input: &'a [Symbol], dist: &'b [D], init: [uint, ..TotalSymbols]) -> EncodeIterator<'a,'b,D> {
+    pub fn new(input: &'a [Symbol], dist: &'b [D], init: [uint, ..TOTAL_SYMBOLS]) -> EncodeIterator<'a,'b,D> {
         assert_eq!(input.len(), dist.len());
         EncodeIterator {
             data: input.iter().zip(dist.iter()).enumerate(),
@@ -77,7 +77,7 @@ impl<'a, 'b, D: NumCast> EncodeIterator<'a,'b,D> {
     }
 
     /// get the initial symbol positions, to be called before iteration
-    pub fn get_init<'c>(&'c self) -> &'c [uint, ..TotalSymbols] {
+    pub fn get_init<'c>(&'c self) -> &'c [uint, ..TOTAL_SYMBOLS] {
         assert_eq!(self.last_active, 0);
         &self.pos
     }
@@ -90,7 +90,7 @@ impl<'a, 'b, D> Iterator<(D,Context)> for EncodeIterator<'a,'b,D>
         let filler: D = NumCast::from(self.size).unwrap();
         self.data.find(|&(_,(_,d))| *d != filler).map(|(i,(sym,d))| {
             let rank = self.last_active - self.pos[*sym as uint];
-            assert!(rank < TotalSymbols);
+            assert!(rank < TOTAL_SYMBOLS);
             self.last_active = i+1;
             self.pos[*sym as uint] = i + 1 + d.to_uint().unwrap();
             debug!("Encoding distance {} at pos {} for symbol {}, computed rank {}, predicting next at {}",
@@ -108,8 +108,8 @@ pub fn encode<'a, 'b, D: Clone + Copy + Eq + NumCast>(input: &'a [Symbol], dista
     let n = input.len();
     assert_eq!(distances.len(), n);
     let mut num_unique = 0u;
-    let mut last = [n, ..TotalSymbols];
-    let mut init = [n, ..TotalSymbols];
+    let mut last = [n, ..TOTAL_SYMBOLS];
+    let mut init = [n, ..TOTAL_SYMBOLS];
     let filler: D = NumCast::from(n).unwrap();
     for (i,&sym) in input.iter().enumerate() {
         distances[i] = filler.clone();
@@ -151,12 +151,12 @@ pub fn encode_simple<D: Clone + Copy + Eq + NumCast>(input: &[Symbol]) -> Vec<D>
     let n = input.len();
     let mut raw_dist: Vec<D> = Vec::from_elem(n, NumCast::from(0i).unwrap());
     let mut eniter = encode(input, raw_dist.as_mut_slice(), &mut MTF::new());
-    let init: Vec<D> = Vec::from_fn(TotalSymbols, |i| NumCast::from(eniter.get_init()[i]).unwrap());
+    let init: Vec<D> = Vec::from_fn(TOTAL_SYMBOLS, |i| NumCast::from(eniter.get_init()[i]).unwrap());
     init.iter().map(|d| d.clone()).chain(eniter.by_ref().map(|(d,_)| d)).collect()
 }
 
 /// Decode a block of distances given the initial symbol positions
-pub fn decode(mut next: [uint,..TotalSymbols], output: &mut [Symbol], mtf: &mut MTF,
+pub fn decode(mut next: [uint,..TOTAL_SYMBOLS], output: &mut [Symbol], mtf: &mut MTF,
         fn_dist: |Context|->io::IoResult<uint>) -> io::IoResult<()> {
 
     let n = output.len();
@@ -182,7 +182,7 @@ pub fn decode(mut next: [uint,..TotalSymbols], output: &mut [Symbol], mtf: &mut 
     }
 
     let alphabet_size = i;
-    let mut ranks = [0 as Rank, ..TotalSymbols];
+    let mut ranks = [0 as Rank, ..TOTAL_SYMBOLS];
     for rank in range(0, i) {
         let sym = mtf.symbols[rank];
         debug!("\tRegistering symbol {} of rank {} at position {}",
@@ -230,11 +230,11 @@ pub fn decode(mut next: [uint,..TotalSymbols], output: &mut [Symbol], mtf: &mut 
 /// Decode version with "batteries included" for quick testing
 pub fn decode_simple<D: ToPrimitive>(n: uint, distances: &[D]) -> Vec<Symbol> {
     let mut output = Vec::from_elem(n, 0 as Symbol);
-    let mut init = [0u, ..TotalSymbols];
-    for i in range(0, TotalSymbols) {
+    let mut init = [0u, ..TOTAL_SYMBOLS];
+    for i in range(0, TOTAL_SYMBOLS) {
         init[i] = distances[i].to_uint().unwrap();
     }
-    let mut di = TotalSymbols;
+    let mut di = TOTAL_SYMBOLS;
     decode(init, output.as_mut_slice(), &mut MTF::new(), |_ctx| {
         di += 1;
         if di > distances.len() {
@@ -264,8 +264,8 @@ mod test {
         let mut mtf = super::super::mtf::MTF::new();
         let mut raw_dist = Vec::from_elem(n, 0u16);
         let eniter = super::encode(bytes, raw_dist.as_mut_slice(), &mut mtf);
-        let mut init = [0u, ..super::TotalSymbols];
-        for i in range(0u, super::TotalSymbols) {
+        let mut init = [0u, ..super::TOTAL_SYMBOLS];
+        for i in range(0u, super::TOTAL_SYMBOLS) {
             init[i] = eniter.get_init()[i];
         }
         // implicit iterator copies, or we can gather in one pass and then split
