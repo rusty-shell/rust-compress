@@ -157,7 +157,7 @@ pub fn compute_suffixes<SUF: NumCast + ToPrimitive>(input: &[Symbol], suf_array:
 }
 
 /// An iterator over BWT output
-pub struct TransformIterator<'a, SUF> {
+pub struct TransformIterator<'a, SUF: 'a> {
     input      : &'a [Symbol],
     suf_iter   : iter::Enumerate<slice::Items<'a,SUF>>,
     origin     : Option<uint>,
