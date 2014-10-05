@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `Model` struct in crate `compress`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, Model">
+
+    <title>compress::entropy::ari::bin::Model - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../../../../main.css">
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <section class="sidebar">
+        
+        <p class='location'><a href='../../../index.html'>compress</a>::<wbr><a href='../../index.html'>entropy</a>::<wbr><a href='../index.html'>ari</a>::<wbr><a href='index.html'>bin</a></p><div class='block struct'><h2>Structs</h2><a class='struct current' href='struct.Model.html'>Model</a><a class='struct ' href='struct.SumProxy.html'>SumProxy</a></div>
+    </section>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press 'S' to search, '?' for more options..."
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content struct">
+<h1 class='fqn'><span class='in-band'>Struct <a href='../../../index.html'>compress</a>::<wbr><a href='../../index.html'>entropy</a>::<wbr><a href='../index.html'>ari</a>::<wbr><a href='index.html'>bin</a>::<wbr><a class='struct' href=''>Model</a><wbr></span><span class='out-of-band'><span id='render-detail'>
+            <a id="collapse-all" href="#">[-]
+            </a>&nbsp;<a id="expand-all" href="#">[+]</a>
+        </span><a id='src-13565' href='../../../../src/compress/home/travis/build/alexcrichton/rust-compress/src/entropy/ari/bin.rs.html#17-24'>[src]</a></span></h1>
+<pre class='rust struct'>pub struct Model {
+    pub rate: <a class='type' href='../../../../compress/entropy/ari/type.Border.html' title='compress::entropy::ari::Border'>Border</a>,
+    // some fields omitted
+}</pre><div class='docblock'><p>A binary value frequency model</p>
+</div><h2 class='fields'>Fields</h2>
+<table><tr><td id='structfield.rate'><a class='stability Unmarked' title='No stability level'></a><code>rate</code></td><td><div class='docblock'><p>learning rate</p>
+</div></td></tr></table><h2 id='methods'>Methods</h2><h3 class='impl'><a class='stability Unmarked' title='No stability level'></a><code>impl <a class='struct' href='../../../../compress/entropy/ari/bin/struct.Model.html' title='compress::entropy::ari::bin::Model'>Model</a></code></h3><div class='impl-methods'><h4 id='method.new_flat' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.new_flat' class='fnname'>new_flat</a>(threshold: <a class='type' href='../../../../compress/entropy/ari/type.Border.html' title='compress::entropy::ari::Border'>Border</a>, rate: <a class='type' href='../../../../compress/entropy/ari/type.Border.html' title='compress::entropy::ari::Border'>Border</a>) -&gt; <a class='struct' href='../../../../compress/entropy/ari/bin/struct.Model.html' title='compress::entropy::ari::bin::Model'>Model</a></code></h4>
+<div class='docblock'><p>Create a new flat (50/50 probability) instance</p>
+</div><h4 id='method.new_custom' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.new_custom' class='fnname'>new_custom</a>(zero_percent: <a href='http://doc.rust-lang.org/master/std/primitive.u8.html'>u8</a>, threshold: <a class='type' href='../../../../compress/entropy/ari/type.Border.html' title='compress::entropy::ari::Border'>Border</a>, rate: <a class='type' href='../../../../compress/entropy/ari/type.Border.html' title='compress::entropy::ari::Border'>Border</a>) -&gt; <a class='struct' href='../../../../compress/entropy/ari/bin/struct.Model.html' title='compress::entropy::ari::bin::Model'>Model</a></code></h4>
+<div class='docblock'><p>Create a new instance with a given percentage for zeroes</p>
+</div><h4 id='method.reset_flat' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.reset_flat' class='fnname'>reset_flat</a>(&amp;mut self)</code></h4>
+<div class='docblock'><p>Reset the model to 50/50 distribution</p>
+</div><h4 id='method.get_probability_zero' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.get_probability_zero' class='fnname'>get_probability_zero</a>(&amp;self) -&gt; <a class='type' href='../../../../compress/entropy/ari/type.Border.html' title='compress::entropy::ari::Border'>Border</a></code></h4>
+<div class='docblock'><p>Return the probability of 0</p>
+</div><h4 id='method.get_probability_one' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.get_probability_one' class='fnname'>get_probability_one</a>(&amp;self) -&gt; <a class='type' href='../../../../compress/entropy/ari/type.Border.html' title='compress::entropy::ari::Border'>Border</a></code></h4>
+<div class='docblock'><p>Return the probability of 1</p>
+</div><h4 id='method.update_zero' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.update_zero' class='fnname'>update_zero</a>(&amp;mut self)</code></h4>
+<div class='docblock'><p>Update the frequency of zero</p>
+</div><h4 id='method.update_one' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.update_one' class='fnname'>update_one</a>(&amp;mut self)</code></h4>
+<div class='docblock'><p>Update the frequency of one</p>
+</div><h4 id='method.update' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.update' class='fnname'>update</a>(&amp;mut self, value: <a href='http://doc.rust-lang.org/master/std/primitive.bool.html'>bool</a>)</code></h4>
+<div class='docblock'><p>Update frequencies in favor of given &#39;value&#39;
+Lower factors produce more aggressive updates</p>
+</div></div><h2 id='implementations'>Trait Implementations</h2><h3 class='impl'><a class='stability Unmarked' title='No stability level'></a><code>impl <a class='trait' href='../../../../compress/entropy/ari/trait.Model.html' title='compress::entropy::ari::Model'>Model</a>&lt;<a href='http://doc.rust-lang.org/master/std/primitive.bool.html'>bool</a>&gt; for <a class='struct' href='../../../../compress/entropy/ari/bin/struct.Model.html' title='compress::entropy::ari::bin::Model'>Model</a></code></h3><div class='impl-methods'><h4 id='method.get_range' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.get_range' class='fnname'>get_range</a>(&amp;self, value: <a href='http://doc.rust-lang.org/master/std/primitive.bool.html'>bool</a>) -&gt; <a href='http://doc.rust-lang.org/master/std/primitive.tuple.html'>(<a class='type' href='../../../../compress/entropy/ari/type.Border.html' title='compress::entropy::ari::Border'>Border</a>, <a class='type' href='../../../../compress/entropy/ari/type.Border.html' title='compress::entropy::ari::Border'>Border</a>)</a></code></h4>
+<h4 id='method.find_value' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.find_value' class='fnname'>find_value</a>(&amp;self, offset: <a class='type' href='../../../../compress/entropy/ari/type.Border.html' title='compress::entropy::ari::Border'>Border</a>) -&gt; <a href='http://doc.rust-lang.org/master/std/primitive.tuple.html'>(<a href='http://doc.rust-lang.org/master/std/primitive.bool.html'>bool</a>, <a class='type' href='../../../../compress/entropy/ari/type.Border.html' title='compress::entropy::ari::Border'>Border</a>, <a class='type' href='../../../../compress/entropy/ari/type.Border.html' title='compress::entropy::ari::Border'>Border</a>)</a></code></h4>
+<h4 id='method.get_denominator' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.get_denominator' class='fnname'>get_denominator</a>(&amp;self) -&gt; <a class='type' href='../../../../compress/entropy/ari/type.Border.html' title='compress::entropy::ari::Border'>Border</a></code></h4>
+<h4 id='method.encode' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.encode' class='fnname'>encode</a>(&amp;self, value: V, re: &amp;mut <a class='struct' href='../../../../compress/entropy/ari/struct.RangeEncoder.html' title='compress::entropy::ari::RangeEncoder'>RangeEncoder</a>, out: &amp;mut <a href='http://doc.rust-lang.org/master/std/primitive.slice.html'>[<a class='type' href='../../../../compress/entropy/ari/type.Symbol.html' title='compress::entropy::ari::Symbol'>Symbol</a>]</a>) -&gt; <a href='http://doc.rust-lang.org/master/std/primitive.uint.html'>uint</a></code></h4>
+<h4 id='method.decode' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.decode' class='fnname'>decode</a>(&amp;self, code: <a class='type' href='../../../../compress/entropy/ari/type.Border.html' title='compress::entropy::ari::Border'>Border</a>, re: &amp;mut <a class='struct' href='../../../../compress/entropy/ari/struct.RangeEncoder.html' title='compress::entropy::ari::RangeEncoder'>RangeEncoder</a>) -&gt; <a href='http://doc.rust-lang.org/master/std/primitive.tuple.html'>(V, <a href='http://doc.rust-lang.org/master/std/primitive.uint.html'>uint</a>)</a></code></h4>
+</div></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <div id="help" class="hidden">
+        <div class="shortcuts">
+            <h1>Keyboard shortcuts</h1>
+            <dl>
+                <dt>?</dt>
+                <dd>Show this help dialog</dd>
+                <dt>S</dt>
+                <dd>Focus the search field</dd>
+                <dt>&larrb;</dt>
+                <dd>Move up in search results</dd>
+                <dt>&rarrb;</dt>
+                <dd>Move down in search results</dd>
+                <dt>&#9166;</dt>
+                <dd>Go to active search result</dd>
+            </dl>
+        </div>
+        <div class="infos">
+            <h1>Search tricks</h1>
+            <p>
+                Prefix searches with a type followed by a colon (e.g.
+                <code>fn:</code>) to restrict the search to a given type.
+            </p>
+            <p>
+                Accepted types are: <code>fn</code>, <code>mod</code>,
+                <code>struct</code>, <code>enum</code>,
+                <code>trait</code>, <code>typedef</code> (or
+                <code>tdef</code>).
+            </p>
+        </div>
+    </div>
+
+    
+
+    <script>
+        window.rootPath = "../../../../";
+        window.currentCrate = "compress";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../../../../jquery.js"></script>
+    <script src="../../../../main.js"></script>
+    
+    <script async src="../../../../search-index.js"></script>
+</body>
+</html>

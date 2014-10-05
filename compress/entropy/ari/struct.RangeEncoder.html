@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `RangeEncoder` struct in crate `compress`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, RangeEncoder">
+
+    <title>compress::entropy::ari::RangeEncoder - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../../../main.css">
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <section class="sidebar">
+        
+        <p class='location'><a href='../../index.html'>compress</a>::<wbr><a href='../index.html'>entropy</a>::<wbr><a href='index.html'>ari</a></p><div class='block mod'><h2>Modules</h2><a class='mod ' href='apm/index.html'>apm</a><a class='mod ' href='bin/index.html'>bin</a><a class='mod ' href='table/index.html'>table</a></div><div class='block struct'><h2>Structs</h2><a class='struct ' href='struct.Decoder.html'>Decoder</a><a class='struct ' href='struct.Encoder.html'>Encoder</a><a class='struct current' href='struct.RangeEncoder.html'>RangeEncoder</a></div><div class='block trait'><h2>Traits</h2><a class='trait ' href='trait.Model.html'>Model</a></div>
+    </section>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press 'S' to search, '?' for more options..."
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content struct">
+<h1 class='fqn'><span class='in-band'>Struct <a href='../../index.html'>compress</a>::<wbr><a href='../index.html'>entropy</a>::<wbr><a href='index.html'>ari</a>::<wbr><a class='struct' href=''>RangeEncoder</a><wbr></span><span class='out-of-band'><span id='render-detail'>
+            <a id="collapse-all" href="#">[-]
+            </a>&nbsp;<a id="expand-all" href="#">[+]</a>
+        </span><a id='src-16029' href='../../../src/compress/home/travis/build/alexcrichton/rust-compress/src/entropy/ari/mod.rs.html#60-70'>[src]</a></span></h1>
+<pre class='rust struct'>pub struct RangeEncoder {
+    pub threshold: <a class='type' href='../../../compress/entropy/ari/type.Border.html' title='compress::entropy::ari::Border'>Border</a>,
+    // some fields omitted
+}</pre><div class='docblock'><p>Range Encoder basic primitive
+Gets probability ranges on the input, produces whole bytes of code on the output,
+where the code is an arbitrary fixed-ppoint value inside the resulting probability range.</p>
+</div><h2 class='fields'>Fields</h2>
+<table><tr><td id='structfield.threshold'><a class='stability Unmarked' title='No stability level'></a><code>threshold</code></td><td><div class='docblock'><p>The minimum distance between low and hai to keep at all times,
+has to be at least the largest incoming &#39;total&#39;,
+and optimally many times larger</p>
+</div></td></tr></table><h2 id='methods'>Methods</h2><h3 class='impl'><a class='stability Unmarked' title='No stability level'></a><code>impl <a class='struct' href='../../../compress/entropy/ari/struct.RangeEncoder.html' title='compress::entropy::ari::RangeEncoder'>RangeEncoder</a></code></h3><div class='impl-methods'><h4 id='method.new' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.new' class='fnname'>new</a>(max_range: <a class='type' href='../../../compress/entropy/ari/type.Border.html' title='compress::entropy::ari::Border'>Border</a>) -&gt; <a class='struct' href='../../../compress/entropy/ari/struct.RangeEncoder.html' title='compress::entropy::ari::RangeEncoder'>RangeEncoder</a></code></h4>
+<div class='docblock'><p>Create a new instance
+will keep the active range below &#39;max_range&#39;</p>
+</div><h4 id='method.reset' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.reset' class='fnname'>reset</a>(&amp;mut self)</code></h4>
+<div class='docblock'><p>Reset the current range</p>
+</div><h4 id='method.process' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.process' class='fnname'>process</a>(&amp;mut self, total: <a class='type' href='../../../compress/entropy/ari/type.Border.html' title='compress::entropy::ari::Border'>Border</a>, from: <a class='type' href='../../../compress/entropy/ari/type.Border.html' title='compress::entropy::ari::Border'>Border</a>, to: <a class='type' href='../../../compress/entropy/ari/type.Border.html' title='compress::entropy::ari::Border'>Border</a>, output: &amp;mut <a href='http://doc.rust-lang.org/master/std/primitive.slice.html'>[<a class='type' href='../../../compress/entropy/ari/type.Symbol.html' title='compress::entropy::ari::Symbol'>Symbol</a>]</a>) -&gt; <a href='http://doc.rust-lang.org/master/std/primitive.uint.html'>uint</a></code></h4>
+<div class='docblock'><p>Process a given interval [from/total,to/total) into the current range
+write into the output slice, and return the number of symbols produced</p>
+</div><h4 id='method.query' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.query' class='fnname'>query</a>(&amp;self, total: <a class='type' href='../../../compress/entropy/ari/type.Border.html' title='compress::entropy::ari::Border'>Border</a>, code: <a class='type' href='../../../compress/entropy/ari/type.Border.html' title='compress::entropy::ari::Border'>Border</a>) -&gt; <a class='type' href='../../../compress/entropy/ari/type.Border.html' title='compress::entropy::ari::Border'>Border</a></code></h4>
+<div class='docblock'><p>Query the value encoded by &#39;code&#39; in range [0,total)</p>
+</div><h4 id='method.get_code_tail' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.get_code_tail' class='fnname'>get_code_tail</a>(&amp;mut self) -&gt; <a class='type' href='../../../compress/entropy/ari/type.Border.html' title='compress::entropy::ari::Border'>Border</a></code></h4>
+<div class='docblock'><p>Get the code tail and close the range
+used at the end of encoding</p>
+</div></div></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <div id="help" class="hidden">
+        <div class="shortcuts">
+            <h1>Keyboard shortcuts</h1>
+            <dl>
+                <dt>?</dt>
+                <dd>Show this help dialog</dd>
+                <dt>S</dt>
+                <dd>Focus the search field</dd>
+                <dt>&larrb;</dt>
+                <dd>Move up in search results</dd>
+                <dt>&rarrb;</dt>
+                <dd>Move down in search results</dd>
+                <dt>&#9166;</dt>
+                <dd>Go to active search result</dd>
+            </dl>
+        </div>
+        <div class="infos">
+            <h1>Search tricks</h1>
+            <p>
+                Prefix searches with a type followed by a colon (e.g.
+                <code>fn:</code>) to restrict the search to a given type.
+            </p>
+            <p>
+                Accepted types are: <code>fn</code>, <code>mod</code>,
+                <code>struct</code>, <code>enum</code>,
+                <code>trait</code>, <code>typedef</code> (or
+                <code>tdef</code>).
+            </p>
+        </div>
+    </div>
+
+    
+
+    <script>
+        window.rootPath = "../../../";
+        window.currentCrate = "compress";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../../../jquery.js"></script>
+    <script src="../../../main.js"></script>
+    
+    <script async src="../../../search-index.js"></script>
+</body>
+</html>

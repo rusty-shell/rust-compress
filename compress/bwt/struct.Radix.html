@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `Radix` struct in crate `compress`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, Radix">
+
+    <title>compress::bwt::Radix - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../../main.css">
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <section class="sidebar">
+        
+        <p class='location'><a href='../index.html'>compress</a>::<wbr><a href='index.html'>bwt</a></p><div class='block mod'><h2>Modules</h2><a class='mod ' href='dc/index.html'>dc</a><a class='mod ' href='mtf/index.html'>mtf</a></div><div class='block struct'><h2>Structs</h2><a class='struct ' href='struct.Decoder.html'>Decoder</a><a class='struct ' href='struct.Encoder.html'>Encoder</a><a class='struct ' href='struct.InverseIterator.html'>InverseIterator</a><a class='struct current' href='struct.Radix.html'>Radix</a><a class='struct ' href='struct.TransformIterator.html'>TransformIterator</a></div><div class='block fn'><h2>Functions</h2><a class='fn ' href='fn.compute_inversion_table.html'>compute_inversion_table</a><a class='fn ' href='fn.compute_suffixes.html'>compute_suffixes</a><a class='fn ' href='fn.decode.html'>decode</a><a class='fn ' href='fn.decode_simple.html'>decode_simple</a><a class='fn ' href='fn.encode.html'>encode</a><a class='fn ' href='fn.encode_simple.html'>encode_simple</a></div>
+    </section>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press 'S' to search, '?' for more options..."
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content struct">
+<h1 class='fqn'><span class='in-band'>Struct <a href='../index.html'>compress</a>::<wbr><a href='index.html'>bwt</a>::<wbr><a class='struct' href=''>Radix</a><wbr></span><span class='out-of-band'><span id='render-detail'>
+            <a id="collapse-all" href="#">[-]
+            </a>&nbsp;<a id="expand-all" href="#">[+]</a>
+        </span><a id='src-3978' href='../../src/compress/home/travis/build/alexcrichton/rust-compress/src/bwt/mod.rs.html#62-65'>[src]</a></span></h1>
+<pre class='rust struct'>pub struct Radix {
+    pub freq: <a href='http://doc.rust-lang.org/master/std/primitive.slice.html'>[<a href='http://doc.rust-lang.org/master/std/primitive.uint.html'>uint</a>, ..ALPHABET_SIZE+1]</a>,
+}</pre><div class='docblock'><p>Radix sorting primitive</p>
+</div><h2 class='fields'>Fields</h2>
+<table><tr><td id='structfield.freq'><a class='stability Unmarked' title='No stability level'></a><code>freq</code></td><td><div class='docblock'><p>number of occurancies (frequency) per symbox</p>
+</div></td></tr></table><h2 id='methods'>Methods</h2><h3 class='impl'><a class='stability Unmarked' title='No stability level'></a><code>impl <a class='struct' href='../../compress/bwt/struct.Radix.html' title='compress::bwt::Radix'>Radix</a></code></h3><div class='impl-methods'><h4 id='method.new' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.new' class='fnname'>new</a>() -&gt; <a class='struct' href='../../compress/bwt/struct.Radix.html' title='compress::bwt::Radix'>Radix</a></code></h4>
+<div class='docblock'><p>create Radix sort instance</p>
+</div><h4 id='method.reset' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.reset' class='fnname'>reset</a>(&amp;mut self)</code></h4>
+<div class='docblock'><p>reset counters
+allows the struct to be re-used</p>
+</div><h4 id='method.gather' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.gather' class='fnname'>gather</a>(&amp;mut self, input: &amp;<a href='http://doc.rust-lang.org/master/std/primitive.slice.html'>[<a class='type' href='../../compress/bwt/type.Symbol.html' title='compress::bwt::Symbol'>Symbol</a>]</a>)</code></h4>
+<div class='docblock'><p>count elements in the input</p>
+</div><h4 id='method.accumulate' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.accumulate' class='fnname'>accumulate</a>(&amp;mut self)</code></h4>
+<div class='docblock'><p>build offset table</p>
+</div><h4 id='method.place' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.place' class='fnname'>place</a>(&amp;mut self, b: <a class='type' href='../../compress/bwt/type.Symbol.html' title='compress::bwt::Symbol'>Symbol</a>) -&gt; <a href='http://doc.rust-lang.org/master/std/primitive.uint.html'>uint</a></code></h4>
+<div class='docblock'><p>return next byte position, advance it internally</p>
+</div><h4 id='method.shift' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.shift' class='fnname'>shift</a>(&amp;mut self)</code></h4>
+<div class='docblock'><p>shift frequences to the left
+allows the offsets to be re-used after all positions are obtained</p>
+</div></div></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <div id="help" class="hidden">
+        <div class="shortcuts">
+            <h1>Keyboard shortcuts</h1>
+            <dl>
+                <dt>?</dt>
+                <dd>Show this help dialog</dd>
+                <dt>S</dt>
+                <dd>Focus the search field</dd>
+                <dt>&larrb;</dt>
+                <dd>Move up in search results</dd>
+                <dt>&rarrb;</dt>
+                <dd>Move down in search results</dd>
+                <dt>&#9166;</dt>
+                <dd>Go to active search result</dd>
+            </dl>
+        </div>
+        <div class="infos">
+            <h1>Search tricks</h1>
+            <p>
+                Prefix searches with a type followed by a colon (e.g.
+                <code>fn:</code>) to restrict the search to a given type.
+            </p>
+            <p>
+                Accepted types are: <code>fn</code>, <code>mod</code>,
+                <code>struct</code>, <code>enum</code>,
+                <code>trait</code>, <code>typedef</code> (or
+                <code>tdef</code>).
+            </p>
+        </div>
+    </div>
+
+    
+
+    <script>
+        window.rootPath = "../../";
+        window.currentCrate = "compress";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../../jquery.js"></script>
+    <script src="../../main.js"></script>
+    
+    <script async src="../../search-index.js"></script>
+</body>
+</html>

@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `Model` trait in crate `compress`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, Model">
+
+    <title>compress::entropy::ari::Model - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../../../main.css">
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <section class="sidebar">
+        
+        <p class='location'><a href='../../index.html'>compress</a>::<wbr><a href='../index.html'>entropy</a>::<wbr><a href='index.html'>ari</a></p><div class='block mod'><h2>Modules</h2><a class='mod ' href='apm/index.html'>apm</a><a class='mod ' href='bin/index.html'>bin</a><a class='mod ' href='table/index.html'>table</a></div><div class='block struct'><h2>Structs</h2><a class='struct ' href='struct.Decoder.html'>Decoder</a><a class='struct ' href='struct.Encoder.html'>Encoder</a><a class='struct ' href='struct.RangeEncoder.html'>RangeEncoder</a></div><div class='block trait'><h2>Traits</h2><a class='trait current' href='trait.Model.html'>Model</a></div>
+    </section>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press 'S' to search, '?' for more options..."
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content trait">
+<h1 class='fqn'><span class='in-band'>Trait <a href='../../index.html'>compress</a>::<wbr><a href='../index.html'>entropy</a>::<wbr><a href='index.html'>ari</a>::<wbr><a class='trait' href=''>Model</a><wbr></span><span class='out-of-band'><span id='render-detail'>
+            <a id="collapse-all" href="#">[-]
+            </a>&nbsp;<a id="expand-all" href="#">[+]</a>
+        </span><a id='src-16968' href='../../../src/compress/home/travis/build/alexcrichton/rust-compress/src/entropy/ari/mod.rs.html#167-197'>[src]</a></span></h1>
+<pre class='rust trait'>pub trait Model&lt;V: <a class='trait' href='http://doc.rust-lang.org/master/core/kinds/trait.Copy.html' title='core::kinds::Copy'>Copy</a> + <a class='trait' href='http://doc.rust-lang.org/master/core/fmt/trait.Show.html' title='core::fmt::Show'>Show</a>&gt; {
+    fn <a href='#tymethod.get_range' class='fnname'>get_range</a>(&amp;self, value: V) -&gt; <a href='http://doc.rust-lang.org/master/std/primitive.tuple.html'>(<a class='type' href='../../../compress/entropy/ari/type.Border.html' title='compress::entropy::ari::Border'>Border</a>, <a class='type' href='../../../compress/entropy/ari/type.Border.html' title='compress::entropy::ari::Border'>Border</a>)</a>;
+    fn <a href='#tymethod.find_value' class='fnname'>find_value</a>(&amp;self, offset: <a class='type' href='../../../compress/entropy/ari/type.Border.html' title='compress::entropy::ari::Border'>Border</a>) -&gt; <a href='http://doc.rust-lang.org/master/std/primitive.tuple.html'>(V, <a class='type' href='../../../compress/entropy/ari/type.Border.html' title='compress::entropy::ari::Border'>Border</a>, <a class='type' href='../../../compress/entropy/ari/type.Border.html' title='compress::entropy::ari::Border'>Border</a>)</a>;
+    fn <a href='#tymethod.get_denominator' class='fnname'>get_denominator</a>(&amp;self) -&gt; <a class='type' href='../../../compress/entropy/ari/type.Border.html' title='compress::entropy::ari::Border'>Border</a>;
+
+    fn <a href='#method.encode' class='fnname'>encode</a>(&amp;self, value: V, re: &amp;mut <a class='struct' href='../../../compress/entropy/ari/struct.RangeEncoder.html' title='compress::entropy::ari::RangeEncoder'>RangeEncoder</a>, out: &amp;mut <a href='http://doc.rust-lang.org/master/std/primitive.slice.html'>[<a class='type' href='../../../compress/entropy/ari/type.Symbol.html' title='compress::entropy::ari::Symbol'>Symbol</a>]</a>) -&gt; <a href='http://doc.rust-lang.org/master/std/primitive.uint.html'>uint</a> { ... }
+    fn <a href='#method.decode' class='fnname'>decode</a>(&amp;self, code: <a class='type' href='../../../compress/entropy/ari/type.Border.html' title='compress::entropy::ari::Border'>Border</a>, re: &amp;mut <a class='struct' href='../../../compress/entropy/ari/struct.RangeEncoder.html' title='compress::entropy::ari::RangeEncoder'>RangeEncoder</a>) -&gt; <a href='http://doc.rust-lang.org/master/std/primitive.tuple.html'>(V, <a href='http://doc.rust-lang.org/master/std/primitive.uint.html'>uint</a>)</a> { ... }
+}</pre><div class='docblock'><p>An abstract model to produce probability ranges
+Can be a table, a mix of tables, or just a smart function.</p>
+</div>
+            <h2 id='required-methods'>Required Methods</h2>
+            <div class='methods'>
+        <h3 id='tymethod.get_range' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#tymethod.get_range' class='fnname'>get_range</a>(&amp;self, value: V) -&gt; <a href='http://doc.rust-lang.org/master/std/primitive.tuple.html'>(<a class='type' href='../../../compress/entropy/ari/type.Border.html' title='compress::entropy::ari::Border'>Border</a>, <a class='type' href='../../../compress/entropy/ari/type.Border.html' title='compress::entropy::ari::Border'>Border</a>)</a></code></h3><div class='docblock'><p>Get the probability range of a value</p>
+</div><h3 id='tymethod.find_value' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#tymethod.find_value' class='fnname'>find_value</a>(&amp;self, offset: <a class='type' href='../../../compress/entropy/ari/type.Border.html' title='compress::entropy::ari::Border'>Border</a>) -&gt; <a href='http://doc.rust-lang.org/master/std/primitive.tuple.html'>(V, <a class='type' href='../../../compress/entropy/ari/type.Border.html' title='compress::entropy::ari::Border'>Border</a>, <a class='type' href='../../../compress/entropy/ari/type.Border.html' title='compress::entropy::ari::Border'>Border</a>)</a></code></h3><div class='docblock'><p>Find the value by a given probability offset, return with the range</p>
+</div><h3 id='tymethod.get_denominator' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#tymethod.get_denominator' class='fnname'>get_denominator</a>(&amp;self) -&gt; <a class='type' href='../../../compress/entropy/ari/type.Border.html' title='compress::entropy::ari::Border'>Border</a></code></h3><div class='docblock'><p>Get the sum of all probabilities</p>
+</div></div>
+            <h2 id='provided-methods'>Provided Methods</h2>
+            <div class='methods'>
+        <h3 id='method.encode' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.encode' class='fnname'>encode</a>(&amp;self, value: V, re: &amp;mut <a class='struct' href='../../../compress/entropy/ari/struct.RangeEncoder.html' title='compress::entropy::ari::RangeEncoder'>RangeEncoder</a>, out: &amp;mut <a href='http://doc.rust-lang.org/master/std/primitive.slice.html'>[<a class='type' href='../../../compress/entropy/ari/type.Symbol.html' title='compress::entropy::ari::Symbol'>Symbol</a>]</a>) -&gt; <a href='http://doc.rust-lang.org/master/std/primitive.uint.html'>uint</a></code></h3><div class='docblock'><p>Encode a value using a range encoder
+return the number of symbols written</p>
+</div><h3 id='method.decode' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.decode' class='fnname'>decode</a>(&amp;self, code: <a class='type' href='../../../compress/entropy/ari/type.Border.html' title='compress::entropy::ari::Border'>Border</a>, re: &amp;mut <a class='struct' href='../../../compress/entropy/ari/struct.RangeEncoder.html' title='compress::entropy::ari::RangeEncoder'>RangeEncoder</a>) -&gt; <a href='http://doc.rust-lang.org/master/std/primitive.tuple.html'>(V, <a href='http://doc.rust-lang.org/master/std/primitive.uint.html'>uint</a>)</a></code></h3><div class='docblock'><p>Decode a value using given &#39;code&#39; on the range encoder
+return a (value, num_symbols_to_shift) pair</p>
+</div></div>
+        <h2 id='implementors'>Implementors</h2>
+        <ul class='item-list' id='implementors-list'>
+    <li><a class='stability Unmarked' title='No stability level'></a><code>impl <a class='trait' href='../../../compress/entropy/ari/trait.Model.html' title='compress::entropy::ari::Model'>Model</a>&lt;<a href='http://doc.rust-lang.org/master/std/primitive.bool.html'>bool</a>&gt; for <a class='struct' href='../../../compress/entropy/ari/apm/struct.Bit.html' title='compress::entropy::ari::apm::Bit'>Bit</a></code></li>
+<li><a class='stability Unmarked' title='No stability level'></a><code>impl <a class='trait' href='../../../compress/entropy/ari/trait.Model.html' title='compress::entropy::ari::Model'>Model</a>&lt;<a href='http://doc.rust-lang.org/master/std/primitive.bool.html'>bool</a>&gt; for <a class='struct' href='../../../compress/entropy/ari/bin/struct.Model.html' title='compress::entropy::ari::bin::Model'>Model</a></code></li>
+<li><a class='stability Unmarked' title='No stability level'></a><code>impl&lt;'a&gt; <a class='trait' href='../../../compress/entropy/ari/trait.Model.html' title='compress::entropy::ari::Model'>Model</a>&lt;<a href='http://doc.rust-lang.org/master/std/primitive.bool.html'>bool</a>&gt; for <a class='struct' href='../../../compress/entropy/ari/bin/struct.SumProxy.html' title='compress::entropy::ari::bin::SumProxy'>SumProxy</a>&lt;'a&gt;</code></li>
+<li><a class='stability Unmarked' title='No stability level'></a><code>impl <a class='trait' href='../../../compress/entropy/ari/trait.Model.html' title='compress::entropy::ari::Model'>Model</a>&lt;<a href='http://doc.rust-lang.org/master/std/primitive.uint.html'>uint</a>&gt; for <a class='struct' href='../../../compress/entropy/ari/table/struct.Model.html' title='compress::entropy::ari::table::Model'>Model</a></code></li>
+<li><a class='stability Unmarked' title='No stability level'></a><code>impl&lt;'a&gt; <a class='trait' href='../../../compress/entropy/ari/trait.Model.html' title='compress::entropy::ari::Model'>Model</a>&lt;<a href='http://doc.rust-lang.org/master/std/primitive.uint.html'>uint</a>&gt; for <a class='struct' href='../../../compress/entropy/ari/table/struct.SumProxy.html' title='compress::entropy::ari::table::SumProxy'>SumProxy</a>&lt;'a&gt;</code></li>
+</ul><script type="text/javascript" async
+                              src="../../../implementors/compress/entropy/ari/trait.Model.js">
+                      </script></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <div id="help" class="hidden">
+        <div class="shortcuts">
+            <h1>Keyboard shortcuts</h1>
+            <dl>
+                <dt>?</dt>
+                <dd>Show this help dialog</dd>
+                <dt>S</dt>
+                <dd>Focus the search field</dd>
+                <dt>&larrb;</dt>
+                <dd>Move up in search results</dd>
+                <dt>&rarrb;</dt>
+                <dd>Move down in search results</dd>
+                <dt>&#9166;</dt>
+                <dd>Go to active search result</dd>
+            </dl>
+        </div>
+        <div class="infos">
+            <h1>Search tricks</h1>
+            <p>
+                Prefix searches with a type followed by a colon (e.g.
+                <code>fn:</code>) to restrict the search to a given type.
+            </p>
+            <p>
+                Accepted types are: <code>fn</code>, <code>mod</code>,
+                <code>struct</code>, <code>enum</code>,
+                <code>trait</code>, <code>typedef</code> (or
+                <code>tdef</code>).
+            </p>
+        </div>
+    </div>
+
+    
+
+    <script>
+        window.rootPath = "../../../";
+        window.currentCrate = "compress";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../../../jquery.js"></script>
+    <script src="../../../main.js"></script>
+    
+    <script async src="../../../search-index.js"></script>
+</body>
+</html>

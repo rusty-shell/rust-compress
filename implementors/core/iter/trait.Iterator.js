@@ -1,0 +1,10 @@
+(function() {var implementors = {};
+implementors['compress'] = ["<a class='stability Unmarked' title='No stability level'></a>impl&lt;'a, 'b, D&gt; <a class='trait' href='http://doc.rust-lang.org/master/core/iter/trait.Iterator.html' title='core::iter::Iterator'>Iterator</a>&lt;<a href='http://doc.rust-lang.org/master/std/primitive.tuple.html'>(D, <a class='struct' href='compress/bwt/dc/struct.Context.html' title='compress::bwt::dc::Context'>Context</a>)</a>&gt; for <a class='struct' href='compress/bwt/dc/struct.EncodeIterator.html' title='compress::bwt::dc::EncodeIterator'>EncodeIterator</a>&lt;'a, 'b, D&gt;","<a class='stability Unmarked' title='No stability level'></a>impl&lt;'a, SUF: <a class='trait' href='http://doc.rust-lang.org/master/core/num/trait.ToPrimitive.html' title='core::num::ToPrimitive'>ToPrimitive</a> + 'static&gt; <a class='trait' href='http://doc.rust-lang.org/master/core/iter/trait.Iterator.html' title='core::iter::Iterator'>Iterator</a>&lt;<a class='type' href='compress/bwt/type.Symbol.html' title='compress::bwt::Symbol'>Symbol</a>&gt; for <a class='struct' href='compress/bwt/struct.TransformIterator.html' title='compress::bwt::TransformIterator'>TransformIterator</a>&lt;'a, SUF&gt;","<a class='stability Unmarked' title='No stability level'></a>impl&lt;'a, SUF: <a class='trait' href='http://doc.rust-lang.org/master/core/num/trait.ToPrimitive.html' title='core::num::ToPrimitive'>ToPrimitive</a>&gt; <a class='trait' href='http://doc.rust-lang.org/master/core/iter/trait.Iterator.html' title='core::iter::Iterator'>Iterator</a>&lt;<a class='type' href='compress/bwt/type.Symbol.html' title='compress::bwt::Symbol'>Symbol</a>&gt; for <a class='struct' href='compress/bwt/struct.InverseIterator.html' title='compress::bwt::InverseIterator'>InverseIterator</a>&lt;'a, SUF&gt;",];
+
+            if (window.register_implementors) {
+                window.register_implementors(implementors);
+            } else {
+                window.pending_implementors = implementors;
+            }
+        
+})()

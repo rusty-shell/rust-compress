@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `Encoder` struct in crate `compress`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, Encoder">
+
+    <title>compress::entropy::ari::Encoder - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../../../main.css">
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <section class="sidebar">
+        
+        <p class='location'><a href='../../index.html'>compress</a>::<wbr><a href='../index.html'>entropy</a>::<wbr><a href='index.html'>ari</a></p><div class='block mod'><h2>Modules</h2><a class='mod ' href='apm/index.html'>apm</a><a class='mod ' href='bin/index.html'>bin</a><a class='mod ' href='table/index.html'>table</a></div><div class='block struct'><h2>Structs</h2><a class='struct ' href='struct.Decoder.html'>Decoder</a><a class='struct current' href='struct.Encoder.html'>Encoder</a><a class='struct ' href='struct.RangeEncoder.html'>RangeEncoder</a></div><div class='block trait'><h2>Traits</h2><a class='trait ' href='trait.Model.html'>Model</a></div>
+    </section>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press 'S' to search, '?' for more options..."
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content struct">
+<h1 class='fqn'><span class='in-band'>Struct <a href='../../index.html'>compress</a>::<wbr><a href='../index.html'>entropy</a>::<wbr><a href='index.html'>ari</a>::<wbr><a class='struct' href=''>Encoder</a><wbr></span><span class='out-of-band'><span id='render-detail'>
+            <a id="collapse-all" href="#">[-]
+            </a>&nbsp;<a id="expand-all" href="#">[+]</a>
+        </span><a id='src-17522' href='../../../src/compress/home/travis/build/alexcrichton/rust-compress/src/entropy/ari/mod.rs.html#201-204'>[src]</a></span></h1>
+<pre class='rust struct'>pub struct Encoder&lt;W&gt; {
+    // some fields omitted
+}</pre><div class='docblock'><p>An arithmetic encoder helper</p>
+</div><h2 id='methods'>Methods</h2><h3 class='impl'><a class='stability Unmarked' title='No stability level'></a><code>impl&lt;W: <a class='trait' href='http://doc.rust-lang.org/master/std/io/trait.Writer.html' title='std::io::Writer'>Writer</a>&gt; <a class='struct' href='../../../compress/entropy/ari/struct.Encoder.html' title='compress::entropy::ari::Encoder'>Encoder</a>&lt;W&gt;</code></h3><div class='impl-methods'><h4 id='method.new' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.new' class='fnname'>new</a>(w: W) -&gt; <a class='struct' href='../../../compress/entropy/ari/struct.Encoder.html' title='compress::entropy::ari::Encoder'>Encoder</a>&lt;W&gt;</code></h4>
+<div class='docblock'><p>Create a new encoder on top of a given Writer</p>
+</div><h4 id='method.encode' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.encode' class='fnname'>encode</a>&lt;V: <a class='trait' href='http://doc.rust-lang.org/master/core/kinds/trait.Copy.html' title='core::kinds::Copy'>Copy</a> + <a class='trait' href='http://doc.rust-lang.org/master/core/fmt/trait.Show.html' title='core::fmt::Show'>Show</a>, M: <a class='trait' href='../../../compress/entropy/ari/trait.Model.html' title='compress::entropy::ari::Model'>Model</a>&lt;V&gt;&gt;(&amp;mut self, value: V, model: &amp;M) -&gt; <a class='type' href='http://doc.rust-lang.org/master/std/io/type.IoResult.html' title='std::io::IoResult'>IoResult</a>&lt;<a href='http://doc.rust-lang.org/master/std/primitive.unit.html'>()</a>&gt;</code></h4>
+<div class='docblock'><p>Encode an abstract value under the given Model</p>
+</div><h4 id='method.finish' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.finish' class='fnname'>finish</a>(self) -&gt; <a href='http://doc.rust-lang.org/master/std/primitive.tuple.html'>(W, <a class='type' href='http://doc.rust-lang.org/master/std/io/type.IoResult.html' title='std::io::IoResult'>IoResult</a>&lt;<a href='http://doc.rust-lang.org/master/std/primitive.unit.html'>()</a>&gt;)</a></code></h4>
+<div class='docblock'><p>Finish encoding by writing the code tail word</p>
+</div><h4 id='method.flush' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.flush' class='fnname'>flush</a>(&amp;mut self) -&gt; <a class='type' href='http://doc.rust-lang.org/master/std/io/type.IoResult.html' title='std::io::IoResult'>IoResult</a>&lt;<a href='http://doc.rust-lang.org/master/std/primitive.unit.html'>()</a>&gt;</code></h4>
+<div class='docblock'><p>Flush the output stream</p>
+</div></div></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <div id="help" class="hidden">
+        <div class="shortcuts">
+            <h1>Keyboard shortcuts</h1>
+            <dl>
+                <dt>?</dt>
+                <dd>Show this help dialog</dd>
+                <dt>S</dt>
+                <dd>Focus the search field</dd>
+                <dt>&larrb;</dt>
+                <dd>Move up in search results</dd>
+                <dt>&rarrb;</dt>
+                <dd>Move down in search results</dd>
+                <dt>&#9166;</dt>
+                <dd>Go to active search result</dd>
+            </dl>
+        </div>
+        <div class="infos">
+            <h1>Search tricks</h1>
+            <p>
+                Prefix searches with a type followed by a colon (e.g.
+                <code>fn:</code>) to restrict the search to a given type.
+            </p>
+            <p>
+                Accepted types are: <code>fn</code>, <code>mod</code>,
+                <code>struct</code>, <code>enum</code>,
+                <code>trait</code>, <code>typedef</code> (or
+                <code>tdef</code>).
+            </p>
+        </div>
+    </div>
+
+    
+
+    <script>
+        window.rootPath = "../../../";
+        window.currentCrate = "compress";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../../../jquery.js"></script>
+    <script src="../../../main.js"></script>
+    
+    <script async src="../../../search-index.js"></script>
+</body>
+</html>
