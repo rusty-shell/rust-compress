@@ -27,11 +27,11 @@ use std::io;
 use std::slice;
 use std::vec::Vec;
 
-static MAXBITS: uint = 15;
-static MAXLCODES: u16 = 286;
-static MAXDCODES: u16 = 30;
-static MAXCODES: u16 = MAXLCODES + MAXDCODES;
-static HISTORY: uint = 32 * 1024;
+const MAXBITS: uint = 15;
+const MAXLCODES: u16 = 286;
+const MAXDCODES: u16 = 30;
+const MAXCODES: u16 = MAXLCODES + MAXDCODES;
+const HISTORY: uint = 32 * 1024;
 
 enum Error {
     HuffmanTreeTooLarge,

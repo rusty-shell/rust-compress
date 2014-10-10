@@ -33,7 +33,7 @@ use std::{io, iter, mem};
 
 pub type Symbol = u8;
 pub type Rank = u8;
-pub static TOTAL_SYMBOLS: uint = 0x100;
+pub const TOTAL_SYMBOLS: uint = 0x100;
 
 
 /// MoveToFront encoder/decoder

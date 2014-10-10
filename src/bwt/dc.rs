@@ -30,7 +30,7 @@ use super::mtf::MTF;
 
 pub type Symbol = u8;
 pub type Rank = u8;
-pub static TOTAL_SYMBOLS: uint = 0x100;
+pub const TOTAL_SYMBOLS: uint = 0x100;
 
 /// Distance coding context
 /// Has all the information potentially needed by the underlying coding model
