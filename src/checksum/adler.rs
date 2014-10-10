@@ -17,7 +17,7 @@ let checksum = state.result();
 
 */
 
-static MOD_ADLER: u32 = 65521;
+const MOD_ADLER: u32 = 65521;
 
 /// Adler state for 32 bits
 pub struct State32 {

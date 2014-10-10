@@ -56,7 +56,7 @@ pub mod mtf;
 /// A base element for the transformation
 pub type Symbol = u8;
 
-pub static ALPHABET_SIZE: uint = 0x100;
+pub const ALPHABET_SIZE: uint = 0x100;
 
 /// Radix sorting primitive
 pub struct Radix    {

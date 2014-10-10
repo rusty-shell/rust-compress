@@ -17,15 +17,15 @@ use super::Border;
 pub type FlatProbability = u16;
 pub type WideProbability = i16;
 
-static BIN_WEIGHT_BITS: uint = 8;
-static BIN_WEIGHT_TOTAL: uint = 1<<BIN_WEIGHT_BITS;
-static FLAT_BITS: FlatProbability = 12;
-static FLAT_TOTAL: int = 1<<(FLAT_BITS as uint);
-static WIDE_BITS: uint = 12;
-static WIDE_OFFSET: WideProbability = 1<<(WIDE_BITS-1);
-//static WIDE_TOTAL: int = (1<<WIDE_BITS)+1;
-static PORTAL_OFFSET: uint = 1<<(WIDE_BITS-BIN_WEIGHT_BITS-1);
-static PORTAL_BINS: uint = 2*PORTAL_OFFSET + 1;
+const BIN_WEIGHT_BITS: uint = 8;
+const BIN_WEIGHT_TOTAL: uint = 1<<BIN_WEIGHT_BITS;
+const FLAT_BITS: FlatProbability = 12;
+const FLAT_TOTAL: int = 1<<(FLAT_BITS as uint);
+const WIDE_BITS: uint = 12;
+const WIDE_OFFSET: WideProbability = 1<<(WIDE_BITS-1);
+//const WIDE_TOTAL: int = (1<<WIDE_BITS)+1;
+const PORTAL_OFFSET: uint = 1<<(WIDE_BITS-BIN_WEIGHT_BITS-1);
+const PORTAL_BINS: uint = 2*PORTAL_OFFSET + 1;
 
 
 /// Bit probability model

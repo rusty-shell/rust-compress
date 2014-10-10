@@ -28,7 +28,7 @@ use std::cmp;
 use std::slice;
 use std::vec::Vec;
 
-static MAGIC: u32 = 0x184d2204;
+const MAGIC: u32 = 0x184d2204;
 
 struct BlockDecoder<'a> {
     input: &'a [u8],

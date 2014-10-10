@@ -42,16 +42,16 @@ pub mod table;
 mod test;
 
 pub type Symbol = u8;
-static SYMBOL_BITS: uint = 8;
-static SYMBOL_TOTAL: uint = 1<<SYMBOL_BITS;
+const SYMBOL_BITS: uint = 8;
+const SYMBOL_TOTAL: uint = 1<<SYMBOL_BITS;
 
 pub type Border = u32;
-static BORDER_BYTES: uint = 4;
-static BORDER_BITS: uint = BORDER_BYTES * 8;
-static BORDER_EXCESS: uint = BORDER_BITS-SYMBOL_BITS;
-static BORDER_SYMBOL_MASK: u32 = ((SYMBOL_TOTAL-1) << BORDER_EXCESS) as u32;
+const BORDER_BYTES: uint = 4;
+const BORDER_BITS: uint = BORDER_BYTES * 8;
+const BORDER_EXCESS: uint = BORDER_BITS-SYMBOL_BITS;
+const BORDER_SYMBOL_MASK: u32 = ((SYMBOL_TOTAL-1) << BORDER_EXCESS) as u32;
 
-pub static RANGE_DEFAULT_THRESHOLD: Border = 1<<14;
+pub const RANGE_DEFAULT_THRESHOLD: Border = 1<<14;
 
 
 /// Range Encoder basic primitive
