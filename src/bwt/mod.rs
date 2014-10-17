@@ -47,8 +47,9 @@ This is an original (mostly trivial) implementation.
 
 */
 
-use std::{cmp, io, iter, slice};
+use std::{cmp, fmt, io, iter, slice};
 use std::vec::Vec;
+
 
 pub mod dc;
 pub mod mtf;
@@ -122,13 +123,13 @@ impl Radix  {
 /// Compute a suffix array from a given input string
 /// Resulting suffixes are guaranteed to be alphabetically sorted
 /// Run time: O(N^3), memory: N words (suf_array) + ALPHABET_SIZE words (Radix)
-pub fn compute_suffixes<SUF: NumCast + ToPrimitive>(input: &[Symbol], suf_array: &mut [SUF]) {
+pub fn compute_suffixes<SUF: NumCast + ToPrimitive + fmt::Show>(input: &[Symbol], suf_array: &mut [SUF]) {
     let mut radix = Radix::new();
     radix.gather(input);
     radix.accumulate();
 
-    debug!("SA compute input: {:?}", input);
-    debug!("radix offsets: {:?}", radix.freq);
+    debug!("SA compute input: {}", input);
+    debug!("radix offsets: {}", radix.freq.as_slice());
 
     for (i,&ch) in input.iter().enumerate() {
         let p = radix.place(ch);
@@ -153,7 +154,7 @@ pub fn compute_suffixes<SUF: NumCast + ToPrimitive>(input: &[Symbol], suf_array:
         });
     }
 
-    debug!("sorted SA: {:?}", suf_array);
+    debug!("sorted SA: {}", suf_array);
 }
 
 /// An iterator over BWT output
@@ -194,7 +195,7 @@ impl<'a, SUF: ToPrimitive + 'a> Iterator<Symbol> for TransformIterator<'a, SUF> 
 }
 
 /// Encode BWT of a given input, using the 'suf_array'
-pub fn encode<'a, SUF: NumCast + ToPrimitive>(input: &'a [Symbol], suf_array: &'a mut [SUF]) -> TransformIterator<'a, SUF> {
+pub fn encode<'a, SUF: NumCast + ToPrimitive + fmt::Show>(input: &'a [Symbol], suf_array: &'a mut [SUF]) -> TransformIterator<'a, SUF> {
     compute_suffixes(input, suf_array);
     TransformIterator::new(input, suf_array)
 }
@@ -210,7 +211,7 @@ pub fn encode_simple(input: &[Symbol]) -> (Vec<Symbol>, uint) {
 
 
 /// Compute an inversion jump table, needed for BWT decoding
-pub fn compute_inversion_table<SUF: NumCast>(input: &[Symbol], origin: uint, table: &mut [SUF]) {
+pub fn compute_inversion_table<SUF: NumCast + fmt::Show>(input: &[Symbol], origin: uint, table: &mut [SUF]) {
     assert_eq!(input.len(), table.len());
 
     let mut radix = Radix::new();
@@ -225,7 +226,7 @@ pub fn compute_inversion_table<SUF: NumCast>(input: &[Symbol], origin: uint, tab
         table[radix.place(ch)] = NumCast::from(origin+2+i).unwrap();
     }
     //table[-1] = origin;
-    debug!("inverse table: {:?}", table)
+    debug!("inverse table: {}", table)
 }
 
 /// An iterator over inverse BWT
@@ -240,7 +241,7 @@ pub struct InverseIterator<'a, SUF: 'a> {
 impl<'a, SUF> InverseIterator<'a, SUF> {
     /// create a new inverse BWT iterator with a given input, origin, and a jump table
     pub fn new(input: &'a [Symbol], origin: uint, table: &'a [SUF]) -> InverseIterator<'a, SUF> {
-        debug!("inverse origin={}, input: {:?}", origin, input);
+        debug!("inverse origin={}, input: {}", origin, input);
         InverseIterator {
             input: input,
             table: table,
@@ -268,7 +269,7 @@ impl<'a, SUF: ToPrimitive> Iterator<Symbol> for InverseIterator<'a, SUF> {
 }
 
 /// Decode a BWT block, given it's origin, and using 'table' temporarily
-pub fn decode<'a, SUF: NumCast>(input: &'a [Symbol], origin: uint, table: &'a mut [SUF]) -> InverseIterator<'a, SUF> {
+pub fn decode<'a, SUF: NumCast + fmt::Show>(input: &'a [Symbol], origin: uint, table: &'a mut [SUF]) -> InverseIterator<'a, SUF> {
     compute_inversion_table(input, origin, table);
     InverseIterator::new(input, origin, table)
 }

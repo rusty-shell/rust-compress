@@ -6,7 +6,6 @@
 
 #[phase(plugin, link)]
 extern crate log;
-extern crate debug;
 
 #[cfg(test)] extern crate rand;
 #[cfg(test)] extern crate test;

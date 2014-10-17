@@ -228,13 +228,13 @@ impl<R: Reader> Decoder<R> {
         debug!("blk: {}", self.blk_checksum);
         debug!("stream: {}", self.stream_checksum);
         debug!("max size: {}", max_block_size);
-        debug!("stream size: {:?}", size);
+        debug!("stream size: {}", size);
 
         self.max_block_size = max_block_size;
 
         // XXX: implement checksums
         let cksum = try!(self.r.read_byte());
-        debug!("ignoring header checksum: {:?}", cksum);
+        debug!("ignoring header checksum: {}", cksum);
         return Ok(());
     }
 
@@ -277,7 +277,7 @@ impl<R: Reader> Decoder<R> {
 
         if self.blk_checksum {
             let cksum = try!(self.r.read_le_u32());
-            debug!("ignoring block checksum {:?}", cksum);
+            debug!("ignoring block checksum {}", cksum);
         }
         return Ok(true);
     }

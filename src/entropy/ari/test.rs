@@ -12,7 +12,7 @@ fn roundtrip(bytes: &[u8]) {
     let (e, r) = e.finish();
     r.unwrap();
     let encoded = e.unwrap();
-    debug!("Roundtrip input {:?} encoded {:?}", bytes, encoded);
+    debug!("Roundtrip input {} encoded {}", bytes, encoded);
     let mut d = super::ByteDecoder::new(BufReader::new(encoded.as_slice()));
     let decoded = d.read_to_end().unwrap();
     assert_eq!(bytes.as_slice(), decoded.as_slice());
@@ -65,7 +65,7 @@ fn roundtrip_term(bytes1: &[u8], bytes2: &[u8]) {
         stream
     };
     let encoded = mw.unwrap();
-    debug!("Roundtrip term input {:?}:{:?} encoded {:?}", bytes1, bytes2, encoded);
+    debug!("Roundtrip term input {}:{} encoded {}", bytes1, bytes2, encoded);
     let br = BufReader::new(encoded.as_slice());
     let br = {
         let mut d = super::ByteDecoder::new(br);
