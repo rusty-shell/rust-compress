@@ -252,7 +252,7 @@ mod test {
     fn roundtrip(bytes: &[u8]) {
         info!("Roundtrip DC of size {}", bytes.len());
         let distances = super::encode_simple::<uint>(bytes);
-        debug!("Roundtrip DC input: {:?}, distances: {:?}", bytes, distances);
+        debug!("Roundtrip DC input: {}, distances: {}", bytes, distances);
         let decoded = super::decode_simple(bytes.len(), distances.as_slice());
         assert_eq!(decoded.as_slice(), bytes);
     }

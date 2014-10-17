@@ -176,7 +176,7 @@ mod test {
         let mut e = Encoder::new(io::MemWriter::new());
         e.write(bytes).unwrap();
         let encoded = e.finish().unwrap();
-        debug!("Roundtrip MTF input: {:?}, ranks: {:?}", bytes, encoded);
+        debug!("Roundtrip MTF input: {}, ranks: {}", bytes, encoded);
         let mut d = Decoder::new(io::BufReader::new(encoded.as_slice()));
         let decoded = d.read_to_end().unwrap();
         assert_eq!(decoded.as_slice(), bytes);
