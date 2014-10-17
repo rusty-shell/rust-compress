@@ -1,6 +1,6 @@
 /*!
 
-BWT (Burrows-Wheeler Transform) forward and backward transformation
+BWT (Burrows-Wheeler Transform) forward and backward transformation. Requires `bwt` feature, enabled by default
 
 This module contains a bruteforce implementation of BWT encoding in Rust as well as standard decoding.
 These are exposed as a standard `Reader` and `Writer` interfaces wrapping an underlying stream.

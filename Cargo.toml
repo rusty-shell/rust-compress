@@ -5,6 +5,15 @@ version = "0.0.1"
 authors = ["Alex Crichton <alex@alexcrichton.com>",
            "Dzmitry Malyshau <kvarkus@gmail.com>"]
 
+[features]
+default = ["bwt", "checksum", "entropy", "flate", "lz4", "zlib"]
+bwt = []
+checksum = []
+entropy = []
+flate = []
+lz4 = []
+zlib = []
+
 [[bin]]
 name = "compress"
 doc = false

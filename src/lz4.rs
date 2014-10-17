@@ -1,6 +1,6 @@
 /*!
 
-LZ4 Decompression and Compression
+LZ4 Decompression and Compression. Requires `lz4` feature, enabled by default
 
 This module contains an implementation in Rust of decompression and compression
 of LZ4-encoded streams. These are exposed as a standard `Reader` and `Writer`
