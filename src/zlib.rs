@@ -1,4 +1,4 @@
-//! ZLIB Compression and Decompression
+//! ZLIB Compression and Decompression. Requires `zlib` feature, enabled by default
 //!
 //! This module contains an implementation of the ZLIB compression scheme. This
 //! compression format is based on an underlying DEFLATE-encoded stream.

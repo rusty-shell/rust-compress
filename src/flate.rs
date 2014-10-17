@@ -1,4 +1,4 @@
-//! DEFLATE Compression and Decompression
+//! DEFLATE Compression and Decompression. Requires `flate` feature, enabled by default
 //!
 //! This module contains an implementation of the DEFLATE compression scheme.
 //! This format is often used as the underpinning of other compression formats.
