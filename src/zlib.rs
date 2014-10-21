@@ -186,7 +186,7 @@ mod test {
         let mut out = Vec::new();
         let mut buf = [0u8, ..40];
         loop {
-            match d.read(buf.mut_slice_to(1 + rand::random::<uint>() % 40)) {
+            match d.read(buf.slice_to_mut(1 + rand::random::<uint>() % 40)) {
                 Ok(n) => {
                     out.push_all(buf.slice_to(n));
                 }
