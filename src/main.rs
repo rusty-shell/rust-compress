@@ -143,7 +143,7 @@ pub fn main() {
             info!("Found pass {}", *met);
             match passes.find_mut(met) {
                 Some(pa) => rsum = (pa.decode)(rsum, &config),
-                None => fail!("Pass is not implemented"),
+                None => panic!("Pass is not implemented"),
             }
         }
         io::util::copy(&mut rsum, &mut output).unwrap();
@@ -169,7 +169,7 @@ pub fn main() {
         for met in config.methods.iter() {
             match passes.find_mut(met) {
                 Some(pa) => wsum = (pa.encode)(wsum, &config),
-                None => fail!("Pass {} is not implemented", *met)
+                None => panic!("Pass {} is not implemented", *met)
             }
         }
         io::util::copy(&mut input, &mut wsum).unwrap();

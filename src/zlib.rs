@@ -137,7 +137,7 @@ mod test {
         let mut d = Decoder::new(BufReader::new(input));
         let got = match d.read_to_end() {
             Ok(b) => b,
-            Err(e) => fail!("error reading: {}", e),
+            Err(e) => panic!("error reading: {}", e),
         };
         assert!(got.as_slice() == output);
     }
