@@ -68,7 +68,7 @@ impl Model {
         let add = (self.total>>add_log) + add_const;
         assert!(add < 2*self.cut_threshold);
         debug!("\tUpdating by adding {} to value {}", add, value);
-        *self.table.get_mut(value) += add as Frequency;
+        self.table[value] += add as Frequency;
         self.total += add;
         if self.total >= self.cut_threshold {
             self.downscale();

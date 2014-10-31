@@ -105,7 +105,7 @@ impl<'a> BlockDecoder<'a> {
         let end = self.end;
         self.grow_output(end + len);
         for i in range(0, len) {
-            *self.output.get_mut(end + i) = (*self.output)[self.start + i];
+            self.output[end + i] = (*self.output)[self.start + i];
         }
 
         self.end += len;

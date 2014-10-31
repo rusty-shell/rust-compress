@@ -1,5 +1,5 @@
 #![crate_type = "bin"]
-#![deny(warnings, missing_doc)]
+#![deny(warnings)]
 #![feature(macro_rules, phase)]
 
 //! A rust-compress application that allows testing of implemented
