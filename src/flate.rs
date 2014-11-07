@@ -305,7 +305,7 @@ impl<R: Reader> Decoder<R> {
                     }
 
                     // Perform the copy
-                    self.block.reserve_additional(dist);
+                    self.block.reserve(dist);
                     let mut finger = if self.outpos >= dist {
                         self.outpos - dist
                     } else {

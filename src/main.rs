@@ -141,7 +141,7 @@ pub fn main() {
         let mut rsum: Box<Reader> = box input;
         for met in methods.iter() {
             info!("Found pass {}", *met);
-            match passes.find_mut(met) {
+            match passes.get_mut(met) {
                 Some(pa) => rsum = (pa.decode)(rsum, &config),
                 None => panic!("Pass is not implemented"),
             }
@@ -167,7 +167,7 @@ pub fn main() {
         }
         let mut wsum: Box<Writer> = box output;
         for met in config.methods.iter() {
-            match passes.find_mut(met) {
+            match passes.get_mut(met) {
                 Some(pa) => wsum = (pa.encode)(wsum, &config),
                 None => panic!("Pass {} is not implemented", *met)
             }
