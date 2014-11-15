@@ -13,6 +13,7 @@ Matt Mahoney for the wonderful 'bbb' commented source
 
 */
 
+use std::num::Float;
 use super::Border;
 pub type FlatProbability = u16;
 pub type WideProbability = i16;

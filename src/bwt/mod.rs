@@ -48,7 +48,7 @@ This is an original (mostly trivial) implementation.
 */
 
 use std::{cmp, fmt, io, iter, slice};
-use std::vec::Vec;
+use std::num::NumCast;
 
 
 pub mod dc;
