@@ -48,14 +48,14 @@ fn error<T>(e: Error) -> io::IoResult<T> {
     Err(io::IoError {
         kind: io::InvalidInput,
         desc: match e {
-            HuffmanTreeTooLarge => "huffman tree too large",
-            InvalidBlockCode => "invalid block code",
-            InvalidHuffmanHeaderSymbol => "invalid huffman header symbol",
-            InvalidHuffmanTree => "invalid huffman tree",
-            InvalidHuffmanTreeHeader => "invalid huffman tree header",
-            InvalidHuffmanCode => "invalid huffman code",
-            InvalidStaticSize => "invalid static size",
-            NotEnoughBits => "not enough bits",
+            Error::HuffmanTreeTooLarge => "huffman tree too large",
+            Error::InvalidBlockCode => "invalid block code",
+            Error::InvalidHuffmanHeaderSymbol => "invalid huffman header symbol",
+            Error::InvalidHuffmanTree => "invalid huffman tree",
+            Error::InvalidHuffmanTreeHeader => "invalid huffman tree header",
+            Error::InvalidHuffmanCode => "invalid huffman code",
+            Error::InvalidStaticSize => "invalid static size",
+            Error::NotEnoughBits => "not enough bits",
         },
         detail: None,
     })
@@ -94,7 +94,7 @@ impl HuffmanTree {
         for i in range(1, MAXBITS + 1) {
             left *= 2;
             left -= tree.count[i] as int;
-            if left < 0 { return error(InvalidHuffmanTree) }
+            if left < 0 { return error(Error::InvalidHuffmanTree) }
         }
 
         // Generate the offset of each length into the 'symbol' array
@@ -137,7 +137,7 @@ impl HuffmanTree {
             first <<= 1;
             code <<= 1;
         }
-        return error(NotEnoughBits);
+        return error(Error::NotEnoughBits);
     }
 }
 
@@ -195,7 +195,7 @@ impl<R: Reader> Decoder<R> {
             0 => self.statik(),
             1 => self.fixed(),
             2 => self.dynamic(),
-            3 => error(InvalidBlockCode),
+            3 => error(Error::InvalidBlockCode),
             _ => unreachable!(),
         }
     }
@@ -226,7 +226,7 @@ impl<R: Reader> Decoder<R> {
     fn statik(&mut self) -> io::IoResult<()> {
         let len = try!(self.r.read_le_u16());
         let nlen = try!(self.r.read_le_u16());
-        if !nlen != len { return error(InvalidStaticSize) }
+        if !nlen != len { return error(Error::InvalidStaticSize) }
         try!(self.r.push_at_least(len as uint, len as uint, &mut self.block));
         self.update_output(0);
         self.bitcnt = 0;
@@ -281,7 +281,7 @@ impl<R: Reader> Decoder<R> {
                     // figure out len/dist that we're working with
                     let n = n - 257;
                     if n as uint > EXTRALENS.len() {
-                        return error(InvalidHuffmanCode)
+                        return error(Error::InvalidHuffmanCode)
                     }
                     let len = EXTRALENS[n as uint] +
                               try!(self.bits(EXTRABITS[n as uint] as uint));
@@ -301,7 +301,7 @@ impl<R: Reader> Decoder<R> {
                     }
 
                     if dist > self.output.len() {
-                        return error(InvalidHuffmanCode)
+                        return error(Error::InvalidHuffmanCode)
                     }
 
                     // Perform the copy
@@ -322,7 +322,7 @@ impl<R: Reader> Decoder<R> {
                         self.block.push(b);
                     }
                 }
-                _ => return error(InvalidHuffmanCode)
+                _ => return error(Error::InvalidHuffmanCode)
             }
         }
         self.update_output(last_updated);
@@ -388,7 +388,7 @@ impl<R: Reader> Decoder<R> {
         let hdist = try!(self.bits(5)) + 1;  // number of distance codes
         let hclen = try!(self.bits(4)) + 4;  // number of code length codes
         if hlit > MAXLCODES || hdist > MAXDCODES {
-            return error(HuffmanTreeTooLarge);
+            return error(Error::HuffmanTreeTooLarge);
         }
 
         // Read off the code length codes, and then build the huffman tree which
@@ -414,7 +414,7 @@ impl<R: Reader> Decoder<R> {
                     lengths[i as uint] = symbol;
                     i += 1;
                 }
-                16 if i == 0 => return error(InvalidHuffmanHeaderSymbol),
+                16 if i == 0 => return error(Error::InvalidHuffmanHeaderSymbol),
                 16 => {
                     let prev = lengths[i as uint - 1];
                     for _ in range(0, try!(self.bits(2)) + 3) {
@@ -425,10 +425,10 @@ impl<R: Reader> Decoder<R> {
                 // all codes start out as 0, so these just skip
                 17 => { i += try!(self.bits(3)) + 3; }
                 18 => { i += try!(self.bits(7)) + 11; }
-                _ => return error(InvalidHuffmanHeaderSymbol),
+                _ => return error(Error::InvalidHuffmanHeaderSymbol),
             }
         }
-        if i > hlit + hdist { return error(InvalidHuffmanTreeHeader) }
+        if i > hlit + hdist { return error(Error::InvalidHuffmanTreeHeader) }
 
         // Use the decoded codes to construct yet another huffman tree
         let arr = lengths.slice_to(hlit as uint);
