@@ -401,7 +401,7 @@ impl<R: Reader> Decoder<R> {
         for i in range(0, hclen as uint) {
             lengths[ORDER[i]] = try!(self.bits(3));
         }
-        let tree = try!(HuffmanTree::construct(lengths));
+        let tree = try!(HuffmanTree::construct(&lengths));
 
         // Decode all of the length and distance codes in one go, we'll
         // partition them into two huffman trees later
@@ -570,7 +570,7 @@ mod test {
         bh.iter(|| {
             d.r = BufReader::new(fixup(input));
             d.reset();
-            output_size = d.read(output).unwrap();
+            output_size = d.read(&mut output).unwrap();
         });
         bh.bytes = output_size as u64;
     }

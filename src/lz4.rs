@@ -509,7 +509,7 @@ mod test {
         bh.iter(|| {
             d.r = BufReader::new(input);
             d.reset();
-            output_size = d.read(output).unwrap();
+            output_size = d.read(&mut output).unwrap();
         });
         bh.bytes = output_size as u64;
     }
