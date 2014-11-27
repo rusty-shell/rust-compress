@@ -486,7 +486,7 @@ mod test {
         e.write(bytes).unwrap();
         let (e, err) = e.finish();
         err.unwrap();
-        let encoded = e.unwrap();
+        let encoded = e.into_inner();
 
         let mut d = Decoder::new(BufReader::new(encoded.as_slice()));
         let decoded = d.read_to_end().unwrap();

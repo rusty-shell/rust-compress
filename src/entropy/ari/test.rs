@@ -11,7 +11,7 @@ fn roundtrip(bytes: &[u8]) {
     e.write(bytes).unwrap();
     let (e, r) = e.finish();
     r.unwrap();
-    let encoded = e.unwrap();
+    let encoded = e.into_inner();
     debug!("Roundtrip input {} encoded {}", bytes, encoded);
     let mut d = super::ByteDecoder::new(BufReader::new(encoded.as_slice()));
     let decoded = d.read_to_end().unwrap();
@@ -29,7 +29,7 @@ fn encode_binary(bytes: &[u8], model: &mut super::bin::Model) -> Vec<u8> {
     }
     let (writer, err) = encoder.finish();
     err.unwrap();
-    writer.unwrap()
+    writer.into_inner()
 }
 
 fn roundtrip_binary(bytes: &[u8], factor: u32) {
@@ -64,7 +64,7 @@ fn roundtrip_term(bytes1: &[u8], bytes2: &[u8]) {
         rez.unwrap();
         stream
     };
-    let encoded = mw.unwrap();
+    let encoded = mw.into_inner();
     debug!("Roundtrip term input {}:{} encoded {}", bytes1, bytes2, encoded);
     let br = BufReader::new(encoded.as_slice());
     let br = {
@@ -116,7 +116,7 @@ fn roundtrip_proxy(bytes: &[u8]) {
     }
     let (writer, err) = encoder.finish();
     err.unwrap();
-    let buffer = writer.unwrap();
+    let buffer = writer.into_inner();
     // decode
     t0.reset_flat();
     t1.reset_flat();
@@ -159,7 +159,7 @@ fn roundtrip_apm(bytes: &[u8]) {
     }
     let (writer, err) = encoder.finish();
     err.unwrap();
-    let output = writer.unwrap();
+    let output = writer.into_inner();
     bit = super::apm::Bit::new_equal();
     gate = super::apm::Gate::new();
     let mut decoder = super::Decoder::new(BufReader::new(output.as_slice()));

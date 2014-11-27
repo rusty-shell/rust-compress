@@ -175,7 +175,7 @@ mod test {
         info!("Roundtrip MTF of size {}", bytes.len());
         let mut e = Encoder::new(io::MemWriter::new());
         e.write(bytes).unwrap();
-        let encoded = e.finish().unwrap();
+        let encoded = e.finish().into_inner();
         debug!("Roundtrip MTF input: {}, ranks: {}", bytes, encoded);
         let mut d = Decoder::new(io::BufReader::new(encoded.as_slice()));
         let decoded = d.read_to_end().unwrap();
@@ -205,7 +205,7 @@ mod test {
         let input = include_bin!("../data/test.txt");
         let mut e = Encoder::new(io::MemWriter::new());
         e.write(input).unwrap();
-        let encoded = e.finish().unwrap();
+        let encoded = e.finish().into_inner();
         bh.iter(|| {
             let mut d = Decoder::new(io::BufReader::new(encoded.as_slice()));
             d.read_to_end().unwrap();
