@@ -204,7 +204,7 @@ pub fn encode<'a, SUF: NumCast + ToPrimitive + fmt::Show>(input: &'a [Symbol], s
 /// Returns the index of the original string in the output matrix.
 pub fn encode_simple(input: &[Symbol]) -> (Vec<Symbol>, uint) {
     let mut suf_array = Vec::from_elem(input.len(), 0u);
-    let mut iter = encode(input, suf_array.as_mut_slice());
+    let iter = encode(input, suf_array.as_mut_slice());
     let output: Vec<Symbol> = iter.collect();
     (output, iter.get_origin())
 }
@@ -545,12 +545,12 @@ mod test {
         let n = input.len();
         let mut suf = Vec::from_elem(n, 0u16);
         let (output, origin) = {
-            let mut to_iter = encode(input, suf.as_mut_slice());
+            let to_iter = encode(input, suf.as_mut_slice());
             let out: Vec<u8> = to_iter.collect();
             (out, to_iter.get_origin())
         };
         bh.iter(|| {
-            let mut from_iter = decode(output.as_slice(), origin, suf.as_mut_slice());
+            let from_iter = decode(output.as_slice(), origin, suf.as_mut_slice());
             from_iter.last().unwrap();
         });
         bh.bytes = n as u64;
