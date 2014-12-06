@@ -47,6 +47,8 @@ This is an original (mostly trivial) implementation.
 
 */
 
+#![allow(missing_docs)]
+
 use std::{cmp, fmt, io, iter, slice};
 use std::num::NumCast;
 

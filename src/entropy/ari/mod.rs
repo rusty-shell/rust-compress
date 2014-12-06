@@ -30,6 +30,8 @@ This is an original implementation.
 
 */
 
+#![allow(missing_docs)]
+
 use std::fmt::Show;
 use std::io::IoResult;
 
