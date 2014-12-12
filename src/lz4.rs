@@ -30,6 +30,19 @@ use std::vec::Vec;
 
 const MAGIC: u32 = 0x184d2204;
 
+const ML_BITS: u32 = 4;
+const ML_MASK: u32 = (1 << ML_BITS as uint) - 1;
+const RUN_BITS: u32 = 8 - ML_BITS;
+const RUN_MASK: u32 = (1 << RUN_BITS as uint) - 1;
+
+const MIN_MATCH: u32 = 4;
+const HASH_LOG: u32 = 17;
+const HASH_TABLE_SIZE: u32 = 1 << (HASH_LOG as uint);
+const HASH_SHIFT: u32 = (MIN_MATCH * 8) - HASH_LOG;
+const INCOMPRESSIBLE: u32 = 128;
+const UNINITHASH: u32 = 0x88888888;
+const MAX_INPUT_SIZE: u32 = 0x7e000000;
+
 struct BlockDecoder<'a> {
     input: &'a [u8],
     output: &'a mut Vec<u8>,
@@ -125,6 +138,153 @@ impl<'a> BlockDecoder<'a> {
         }
         unsafe {
             self.output.set_len(target);
+        }
+    }
+}
+
+struct BlockEncoder<'a> {
+    input: &'a [u8],
+    output: &'a mut Vec<u8>,
+    hash_table: Vec<u32>,
+    pos: u32,
+    anchor: u32,
+    dest_pos: u32
+}
+
+/// Returns maximum possible size of compressed output
+/// given source size
+pub fn compression_bound(size: u32) -> Option<u32> {
+    if size > MAX_INPUT_SIZE {
+        None
+    } else {
+        Some(size + (size / 255) + 16 + 4)
+    }
+}
+
+impl<'a> BlockEncoder<'a> {
+    #[inline(always)]
+    fn seq_at(&self, pos: u32) -> u32 {
+        (self.input[pos as uint + 3] as u32) << 24
+            | (self.input[pos as uint + 2] as u32) << 16
+            | (self.input[pos as uint + 1] as u32) << 8
+            | (self.input[pos as uint] as u32)
+    }
+
+    fn write_literals(&mut self, len: u32, ml_len: u32, pos: u32) {
+        let mut ln = len;
+
+        let code = if ln > RUN_MASK - 1 { RUN_MASK as u8 } else { ln as u8 };
+
+        if ml_len > ML_MASK - 1 {
+            self.output[self.dest_pos as uint] = (code << ML_BITS as uint) + ML_MASK as u8;
+        } else {
+            self.output[self.dest_pos as uint] = (code << ML_BITS as uint) + ml_len as u8;
+        }
+
+        self.dest_pos += 1;
+
+        if code == RUN_MASK as u8 {
+            ln -= RUN_MASK;
+            while ln > 254 {
+                self.output[self.dest_pos as uint] = 255;
+                self.dest_pos += 1;
+                ln -= 255;
+            }
+
+            self.output[self.dest_pos as uint] = ln as u8;
+            self.dest_pos += 1;
+        }
+
+        // FIXME: find out why slicing syntax fails tests
+        //self.output[self.dest_pos as uint .. (self.dest_pos + len) as uint] = self.input[pos as uint.. (pos + len) as uint];
+        for i in range(0, len as uint) {
+            self.output[self.dest_pos as uint + i] = self.input[pos as uint + i];
+        }
+
+        self.dest_pos += len;
+    }
+
+    fn encode(&mut self) -> u32 {
+        let input_len = self.input.len() as u32;
+
+        match compression_bound(input_len) {
+            None => 0,
+            Some(out_size) => {
+                let additional = out_size as uint - self.output.capacity();
+                self.output.reserve(additional);
+                unsafe {self.output.set_len(out_size as uint); }
+
+                let mut step = 1u32;
+                let mut limit = INCOMPRESSIBLE;
+
+                loop {
+                    if self.pos + 12 > input_len {
+                        let tmp = self.anchor;
+                        self.write_literals(self.input.len() as u32 - tmp, 0, tmp);
+                        unsafe { self.output.set_len(self.dest_pos as uint) };
+                        return self.dest_pos;
+                    }
+
+                    let seq = self.seq_at(self.pos);
+
+                    let hash = (seq * 2654435761) >> (HASH_SHIFT as uint);
+                    let mut r = self.hash_table[hash as uint] + UNINITHASH;
+                    self.hash_table[hash as uint] = self.pos - UNINITHASH;
+
+                    if ((self.pos - r) >> 16) != 0 || seq != self.seq_at(r) {
+                        if self.pos - self.anchor > limit {
+                            limit = limit << 1;
+                            step += 1 + (step >> 2);
+                        }
+                        self.pos += step;
+                        continue;
+                    }
+
+                    if step > 1 {
+                        self.hash_table[hash as uint] = r - UNINITHASH;
+                        self.pos -= step - 1;
+                        step = 1;
+                        continue;
+                    }
+
+                    limit = INCOMPRESSIBLE;
+
+                    let ln = self.pos - self.anchor;
+                    let back = self.pos - r;
+                    let anchor = self.anchor;
+
+                    self.pos += MIN_MATCH;
+                    r += MIN_MATCH;
+                    self.anchor = self.pos;
+
+                    while (self.pos < input_len - 5) && self.input[self.pos as uint] == self.input[r as uint] {
+                        self.pos += 1;
+                        r += 1
+                    }
+
+                    let mut ml_len = self.pos - self.anchor;
+
+                    self.write_literals(ln, ml_len, anchor);
+                    self.output[self.dest_pos as uint] = back as u8;
+                    self.output[self.dest_pos as uint + 1] = (back >> 8) as u8;
+                    self.dest_pos += 2;
+
+                    if ml_len > ML_MASK - 1 {
+                        ml_len -= ML_MASK;
+                        while ml_len > 254 {
+                            ml_len -= 255;
+
+                            self.output[self.dest_pos as uint] = 255;
+                            self.dest_pos += 1;
+                        }
+
+                        self.output[self.dest_pos as uint] = ml_len as u8;
+                        self.dest_pos += 1;
+                    }
+
+                    self.anchor = self.pos;
+                }
+            }
         }
     }
 }
@@ -420,6 +580,22 @@ pub fn decode_block(input: &[u8], output: &mut Vec<u8>) -> uint {
     b.decode()
 }
 
+
+/// Encodes input into pure LZ4 block. Return count of bytes
+/// processed.
+pub fn encode_block(input: &[u8], output: &mut Vec<u8>) -> uint {
+    let mut encoder = BlockEncoder {
+        input: input,
+        output: output,
+        hash_table: Vec::from_elem(HASH_TABLE_SIZE as uint, 0),
+        pos: 0,
+        anchor: 0,
+        dest_pos: 0
+    };
+
+    encoder.encode() as uint
+}
+
 #[cfg(test)]
 mod test {
     use std::io::{BufReader, MemWriter};
@@ -446,6 +622,19 @@ mod test {
         test_decode(include_bin!("data/test.lz4.7"), reference);
         test_decode(include_bin!("data/test.lz4.8"), reference);
         test_decode(include_bin!("data/test.lz4.9"), reference);
+    }
+
+    #[test]
+    fn raw_encode_block() {
+        let data = include_bin!("data/test.txt");
+        let mut encoded = Vec::new();
+
+        super::encode_block(data, &mut encoded);
+        let mut decoded = Vec::new();
+
+        super::decode_block(encoded.as_slice(), &mut decoded);
+
+        assert_eq!(data, decoded.as_slice());
     }
 
     #[test]
