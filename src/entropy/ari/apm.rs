@@ -30,6 +30,7 @@ const PORTAL_BINS: uint = 2*PORTAL_OFFSET + 1;
 
 
 /// Bit probability model
+#[deriving(Copy)]
 pub struct Bit(FlatProbability);
 
 impl Bit {

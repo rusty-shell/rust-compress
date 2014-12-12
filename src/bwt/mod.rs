@@ -206,8 +206,8 @@ pub fn encode<'a, SUF: NumCast + ToPrimitive + fmt::Show>(input: &'a [Symbol], s
 /// Returns the index of the original string in the output matrix.
 pub fn encode_simple(input: &[Symbol]) -> (Vec<Symbol>, uint) {
     let mut suf_array = Vec::from_elem(input.len(), 0u);
-    let iter = encode(input, suf_array.as_mut_slice());
-    let output: Vec<Symbol> = iter.collect();
+    let mut iter = encode(input, suf_array.as_mut_slice());
+    let output: Vec<Symbol> = iter.by_ref().collect();
     (output, iter.get_origin())
 }
 

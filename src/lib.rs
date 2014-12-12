@@ -1,6 +1,7 @@
 #![crate_name = "compress"]
 #![deny(missing_docs, warnings)]
-#![feature(macro_rules, phase, opt_out_copy)]
+#![feature(macro_rules, phase)]
+#![allow(missing_copy_implementations)]
 
 //! dox (placeholder)
 
