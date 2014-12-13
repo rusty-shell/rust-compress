@@ -270,8 +270,7 @@ mod test {
             init[i] = eniter.get_init()[i];
         }
         // implicit iterator copies, or we can gather in one pass and then split
-        let contexts: Vec<super::Context> = eniter.map(|(_,ctx)| ctx).collect();
-        let distances: Vec<u16> = eniter.map(|(d,_)| d).collect();
+        let (distances, contexts) = ::std::vec::unzip(eniter);
         let mut output = Vec::from_elem(n, 0u8);
         let mut di = 0u;
         super::decode(init, output.as_mut_slice(), &mut mtf, |ctx| {

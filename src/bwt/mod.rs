@@ -547,8 +547,8 @@ mod test {
         let n = input.len();
         let mut suf = Vec::from_elem(n, 0u16);
         let (output, origin) = {
-            let to_iter = encode(input, suf.as_mut_slice());
-            let out: Vec<u8> = to_iter.collect();
+            let mut to_iter = encode(input, suf.as_mut_slice());
+            let out: Vec<u8> = to_iter.by_ref().collect();
             (out, to_iter.get_origin())
         };
         bh.iter(|| {
