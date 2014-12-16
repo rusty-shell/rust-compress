@@ -4,6 +4,7 @@ name = "compress"
 version = "0.0.1"
 authors = ["Alex Crichton <alex@alexcrichton.com>",
            "Dzmitry Malyshau <kvarkus@gmail.com>"]
+license = "MIT/Apache-2.0"
 
 [features]
 default = ["bwt", "checksum", "entropy", "flate", "lz4", "zlib"]
