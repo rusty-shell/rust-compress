@@ -148,7 +148,7 @@ impl RangeEncoder {
     pub fn query(&self, total: Border, code: Border) -> Border {
         debug!("\t\tQuerying code {} of total {} under range [{}-{})",
             code, total, self.low, self.hai);
-        debug_assert!(self.low <= code && code < self.hai)
+        debug_assert!(self.low <= code && code < self.hai);
         let range = (self.hai - self.low) / total;
         (code - self.low) / range
     }
