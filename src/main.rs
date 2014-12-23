@@ -37,7 +37,7 @@ impl Config {
         let mut handlers: HashMap<&str,|&str, &mut Config|> = HashMap::new();
         handlers.insert("d",|_, cfg| { cfg.decompress = true; });
         handlers.insert("block",|b, cfg| {
-            cfg.block_size = from_str(b).unwrap();
+            cfg.block_size = b.parse().unwrap();
         });
 
         for arg in args.iter().skip(1) {

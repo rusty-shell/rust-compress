@@ -59,7 +59,7 @@ impl Context {
 
 /// DC body iterator, can be used to encode distances
 pub struct EncodeIterator<'a,'b, D: 'b> {
-    data: iter::Enumerate<iter::Zip<vec::Items<'a,Symbol>,vec::Items<'b, D>>>,
+    data: iter::Enumerate<iter::Zip<vec::Iter<'a,Symbol>,vec::Iter<'b, D>>>,
     pos: [uint, ..TOTAL_SYMBOLS],
     last_active: uint,
     size: uint,
