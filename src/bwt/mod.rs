@@ -64,14 +64,14 @@ pub const ALPHABET_SIZE: uint = 0x100;
 /// Radix sorting primitive
 pub struct Radix    {
     /// number of occurancies (frequency) per symbox
-    pub freq    : [uint, ..ALPHABET_SIZE+1],
+    pub freq    : [uint; ALPHABET_SIZE+1],
 }
 
 impl Radix  {
     /// create Radix sort instance
     pub fn new() -> Radix   {
         Radix   {
-            freq : [0, ..ALPHABET_SIZE+1],
+            freq : [0; ALPHABET_SIZE+1],
         }
     }
 

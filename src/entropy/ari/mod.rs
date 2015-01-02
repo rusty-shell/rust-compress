@@ -190,7 +190,7 @@ pub trait Model<V: Copy + Show> {
         let offset = re.query(total, code);
         let (value, lo, hi) = self.find_value(offset);
         debug!("\tDecoding value {} of offset {} with total {}", value, offset, total);
-        let mut out = [0 as Symbol, ..BORDER_BYTES];
+        let mut out = [0 as Symbol; BORDER_BYTES];
         let shift = re.process(total, lo, hi, out.as_mut_slice());
         debug_assert_eq!(if shift==0 {0} else {code>>(BORDER_BITS - shift*8)},
             out.slice_to(shift).iter().fold(0 as Border, |u,&b| (u<<8)+(b as Border)));
@@ -216,7 +216,7 @@ impl<W: Writer> Encoder<W> {
 
     /// Encode an abstract value under the given Model
     pub fn encode<V: Copy + Show, M: Model<V>>(&mut self, value: V, model: &M) -> IoResult<()> {
-        let mut buf = [0 as Symbol, ..BORDER_BYTES];
+        let mut buf = [0 as Symbol; BORDER_BYTES];
         let num = model.encode(value, &mut self.range, buf.as_mut_slice());
         self.stream.write(buf.slice_to(num))
     }

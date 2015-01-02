@@ -84,7 +84,7 @@ impl<'a> BlockDecoder<'a> {
                 let mut len = self.length(code & 0xf);
                 let literal = self.end - self.start;
                 if literal < 4 {
-                    static DECR: [uint, ..4] = [0, 3, 2, 3];
+                    static DECR: [uint; 4] = [0, 3, 2, 3];
                     self.cp(4, DECR[literal]);
                 } else {
                     len += 4;
@@ -345,7 +345,7 @@ impl<R: Reader> Decoder<R> {
             return Err(io::standard_error(io::InvalidInput))
         }
 
-        let mut bits = [0, ..3];
+        let mut bits = [0; 3];
         try!(self.r.read(bits.slice_to_mut(2)));
         let flg = bits[0];
         let bd = bits[1];
@@ -365,7 +365,7 @@ impl<R: Reader> Decoder<R> {
         // bit 0 is whether there is a preset dictionary
         let preset_dictionary = (flg & 0x01) != 0;
 
-        static MAX_SIZES: [uint, ..8] =
+        static MAX_SIZES: [uint; 8] =
             [0, 0, 0, 0, // all N/A
              64 << 10,   // 64KB
              256 << 10,  // 256 KB
@@ -658,7 +658,7 @@ mod test {
         let input = include_bin!("data/test.lz4.1");
         let mut d = Decoder::new(BufReader::new(input));
         let mut out = Vec::new();
-        let mut buf = [0u8, ..40];
+        let mut buf = [0u8; 40];
         loop {
             match d.read(buf.slice_to_mut(1 + rand::random::<uint>() % 40)) {
                 Ok(n) => {
@@ -693,7 +693,7 @@ mod test {
     fn decompress_speed(bh: &mut test::Bencher) {
         let input = include_bin!("data/test.lz4.9");
         let mut d = Decoder::new(BufReader::new(input));
-        let mut output = [0u8, ..65536];
+        let mut output = [0u8; 65536];
         let mut output_size = 0;
         bh.iter(|| {
             d.r = BufReader::new(input);

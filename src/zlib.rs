@@ -184,7 +184,7 @@ mod test {
         let input = include_bin!("data/test.z.1");
         let mut d = Decoder::new(BufReader::new(input));
         let mut out = Vec::new();
-        let mut buf = [0u8, ..40];
+        let mut buf = [0u8; 40];
         loop {
             match d.read(buf.slice_to_mut(1 + rand::random::<uint>() % 40)) {
                 Ok(n) => {
@@ -217,7 +217,7 @@ mod test {
     fn decompress_speed(bh: &mut test::Bencher) {
         let input = include_bin!("data/test.z.9");
         let mut d = Decoder::new(BufReader::new(input));
-        let mut output = [0u8, ..65536];
+        let mut output = [0u8; 65536];
         let mut output_size = 0;
         bh.iter(|| {
             d.inner.r = BufReader::new(input);

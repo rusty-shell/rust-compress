@@ -64,11 +64,11 @@ fn error<T>(e: Error) -> io::IoResult<T> {
 struct HuffmanTree {
     /// An array which counts the number of codes which can be found at the
     /// index's bit length, or count[n] is the number of n-bit codes
-    pub count: [u16, ..MAXBITS + 1],
+    pub count: [u16; MAXBITS + 1],
 
     /// Symbols in this huffman tree in sorted order. This preserves the
     /// original huffman codes
-    pub symbol: [u16, ..MAXCODES as uint],
+    pub symbol: [u16; MAXCODES as uint],
 }
 
 impl HuffmanTree {
@@ -77,8 +77,8 @@ impl HuffmanTree {
     /// entry in the array corresponds to the length of the nth symbol.
     fn construct(lens: &[u16]) -> io::IoResult<HuffmanTree> {
         let mut tree = HuffmanTree {
-            count: [0, ..MAXBITS + 1],
-            symbol: [0, ..MAXCODES as uint],
+            count: [0; MAXBITS + 1],
+            symbol: [0; MAXCODES as uint],
         };
         // Collect the lengths of all symbols
         for len in lens.iter() {
@@ -98,7 +98,7 @@ impl HuffmanTree {
         }
 
         // Generate the offset of each length into the 'symbol' array
-        let mut offs = [0, ..MAXBITS + 1];
+        let mut offs = [0; MAXBITS + 1];
         for i in range(1, MAXBITS) {
             offs[i + 1] = offs[i] + tree.count[i];
         }
@@ -144,7 +144,7 @@ impl HuffmanTree {
 #[cfg(genflate)]
 fn main() {
     static FIXLCODES: uint = 388;
-    let mut arr = [0, ..FIXLCODES];
+    let mut arr = [0; FIXLCODES];
     for i in range(0, 144) { arr[i] = 8; }
     for i in range(144, 256) { arr[i] = 9; }
     for i in range(256, 280) { arr[i] = 7; }
@@ -251,23 +251,23 @@ impl<R: Reader> Decoder<R> {
     fn codes(&mut self, lens: &HuffmanTree,
              dist: &HuffmanTree) -> io::IoResult<()> {
         // extra base length for codes 257-285
-        static EXTRALENS: [u16, ..29] = [
+        static EXTRALENS: [u16; 29] = [
             3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51,
             59, 67, 83, 99, 115, 131, 163, 195, 227, 258
         ];
         // extra bits to read for codes 257-285
-        static EXTRABITS: [u16, ..29] = [
+        static EXTRABITS: [u16; 29] = [
             0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4,
             4, 5, 5, 5, 5, 0,
         ];
         // base offset for distance codes.
-        static EXTRADIST: [u16, ..30] = [
+        static EXTRADIST: [u16; 30] = [
             1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385,
             513, 769, 1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385,
             24577,
         ];
         // number of bits to read for distance codes (to add to the offset)
-        static EXTRADBITS: [u16, ..30] = [
+        static EXTRADBITS: [u16; 30] = [
             0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9,
             10, 10, 11, 11, 12, 12, 13, 13,
         ];
@@ -394,10 +394,10 @@ impl<R: Reader> Decoder<R> {
         // Read off the code length codes, and then build the huffman tree which
         // is then used to decode the actual huffman tree for the rest of the
         // data.
-        static ORDER: [uint, ..19] = [
+        static ORDER: [uint; 19] = [
             16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15,
         ];
-        let mut lengths = [0, ..19];
+        let mut lengths = [0; 19];
         for i in range(0, hclen as uint) {
             lengths[ORDER[i]] = try!(self.bits(3));
         }
@@ -405,7 +405,7 @@ impl<R: Reader> Decoder<R> {
 
         // Decode all of the length and distance codes in one go, we'll
         // partition them into two huffman trees later
-        let mut lengths = [0, ..MAXCODES as uint];
+        let mut lengths = [0; MAXCODES as uint];
         let mut i = 0;
         while i < hlit + hdist {
             let symbol = try!(tree.decode(self));
@@ -532,7 +532,7 @@ mod test {
         let input = include_bin!("data/test.z.1");
         let mut d = Decoder::new(BufReader::new(fixup(input)));
         let mut out = Vec::new();
-        let mut buf = [0u8, ..40];
+        let mut buf = [0u8; 40];
         loop {
             match d.read(buf.slice_to_mut(1 + rand::random::<uint>() % 40)) {
                 Ok(n) => {
@@ -565,7 +565,7 @@ mod test {
     fn decompress_speed(bh: &mut test::Bencher) {
         let input = include_bin!("data/test.z.9");
         let mut d = Decoder::new(BufReader::new(fixup(input)));
-        let mut output = [0u8, ..65536];
+        let mut output = [0u8; 65536];
         let mut output_size = 0;
         bh.iter(|| {
             d.r = BufReader::new(fixup(input));

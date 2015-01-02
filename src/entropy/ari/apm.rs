@@ -129,7 +129,7 @@ impl super::Model<bool> for Bit {
 /// maps an input binary probability into a new one
 /// by interpolating between internal maps in non-linear space
 pub struct Gate {
-    map: [Bit, ..PORTAL_BINS],
+    map: [Bit; PORTAL_BINS],
 }
 
 pub type BinCoords = (uint, uint); // (index, weight)
@@ -138,7 +138,7 @@ impl Gate {
     /// Create a new gate instance
     pub fn new() -> Gate {
         let mut g = Gate {
-            map: [Bit::new_equal(), ..PORTAL_BINS],
+            map: [Bit::new_equal(); PORTAL_BINS],
         };
         for (i,bit) in g.map.iter_mut().enumerate() {
             let rp = (i as f32)/(PORTAL_OFFSET as f32) - 1.0;

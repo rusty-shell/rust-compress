@@ -39,13 +39,13 @@ pub const TOTAL_SYMBOLS: uint = 0x100;
 /// MoveToFront encoder/decoder
 pub struct MTF {
     /// rank-ordered list of unique Symbols
-    pub symbols: [Symbol, ..TOTAL_SYMBOLS],
+    pub symbols: [Symbol; TOTAL_SYMBOLS],
 }
 
 impl MTF {
     /// create a new zeroed MTF
     pub fn new() -> MTF {
-        MTF { symbols: [0, ..TOTAL_SYMBOLS] }
+        MTF { symbols: [0; TOTAL_SYMBOLS] }
     }
 
     /// set the order of symbols to be alphabetical

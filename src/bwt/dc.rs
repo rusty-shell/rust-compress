@@ -60,14 +60,14 @@ impl Context {
 /// DC body iterator, can be used to encode distances
 pub struct EncodeIterator<'a,'b, D: 'b> {
     data: iter::Enumerate<iter::Zip<vec::Iter<'a,Symbol>,vec::Iter<'b, D>>>,
-    pos: [uint, ..TOTAL_SYMBOLS],
+    pos: [uint; TOTAL_SYMBOLS],
     last_active: uint,
     size: uint,
 }
 
 impl<'a, 'b, D: NumCast> EncodeIterator<'a,'b, D> {
     /// create a new encode iterator
-    pub fn new(input: &'a [Symbol], dist: &'b [D], init: [uint, ..TOTAL_SYMBOLS]) -> EncodeIterator<'a,'b,D> {
+    pub fn new(input: &'a [Symbol], dist: &'b [D], init: [uint; TOTAL_SYMBOLS]) -> EncodeIterator<'a,'b,D> {
         assert_eq!(input.len(), dist.len());
         EncodeIterator {
             data: input.iter().zip(dist.iter()).enumerate(),
@@ -78,7 +78,7 @@ impl<'a, 'b, D: NumCast> EncodeIterator<'a,'b, D> {
     }
 
     /// get the initial symbol positions, to be called before iteration
-    pub fn get_init<'c>(&'c self) -> &'c [uint, ..TOTAL_SYMBOLS] {
+    pub fn get_init<'c>(&'c self) -> &'c [uint; TOTAL_SYMBOLS] {
         assert_eq!(self.last_active, 0);
         &self.pos
     }
@@ -109,8 +109,8 @@ pub fn encode<'a, 'b, D: Clone + Copy + Eq + NumCast>(input: &'a [Symbol], dista
     let n = input.len();
     assert_eq!(distances.len(), n);
     let mut num_unique = 0u;
-    let mut last = [n, ..TOTAL_SYMBOLS];
-    let mut init = [n, ..TOTAL_SYMBOLS];
+    let mut last = [n; TOTAL_SYMBOLS];
+    let mut init = [n; TOTAL_SYMBOLS];
     let filler: D = NumCast::from(n).unwrap();
     for (i,&sym) in input.iter().enumerate() {
         distances[i] = filler.clone();
@@ -157,7 +157,7 @@ pub fn encode_simple<D: Clone + Copy + Eq + NumCast>(input: &[Symbol]) -> Vec<D>
 }
 
 /// Decode a block of distances given the initial symbol positions
-pub fn decode(mut next: [uint,..TOTAL_SYMBOLS], output: &mut [Symbol], mtf: &mut MTF,
+pub fn decode(mut next: [uint; TOTAL_SYMBOLS], output: &mut [Symbol], mtf: &mut MTF,
         fn_dist: |Context|->io::IoResult<uint>) -> io::IoResult<()> {
 
     let n = output.len();
@@ -183,7 +183,7 @@ pub fn decode(mut next: [uint,..TOTAL_SYMBOLS], output: &mut [Symbol], mtf: &mut
     }
 
     let alphabet_size = i;
-    let mut ranks = [0 as Rank, ..TOTAL_SYMBOLS];
+    let mut ranks = [0 as Rank; TOTAL_SYMBOLS];
     for rank in range(0, i) {
         let sym = mtf.symbols[rank];
         debug!("\tRegistering symbol {} of rank {} at position {}",
@@ -231,7 +231,7 @@ pub fn decode(mut next: [uint,..TOTAL_SYMBOLS], output: &mut [Symbol], mtf: &mut
 /// Decode version with "batteries included" for quick testing
 pub fn decode_simple<D: ToPrimitive>(n: uint, distances: &[D]) -> Vec<Symbol> {
     let mut output = Vec::from_elem(n, 0 as Symbol);
-    let mut init = [0u, ..TOTAL_SYMBOLS];
+    let mut init = [0u; TOTAL_SYMBOLS];
     for i in range(0, TOTAL_SYMBOLS) {
         init[i] = distances[i].to_uint().unwrap();
     }
@@ -265,7 +265,7 @@ mod test {
         let mut mtf = super::super::mtf::MTF::new();
         let mut raw_dist = Vec::from_elem(n, 0u16);
         let eniter = super::encode(bytes, raw_dist.as_mut_slice(), &mut mtf);
-        let mut init = [0u, ..super::TOTAL_SYMBOLS];
+        let mut init = [0u; super::TOTAL_SYMBOLS];
         for i in range(0u, super::TOTAL_SYMBOLS) {
             init[i] = eniter.get_init()[i];
         }
