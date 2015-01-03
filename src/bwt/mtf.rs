@@ -186,12 +186,12 @@ mod test {
     fn some_roundtrips() {
         roundtrip(b"teeesst_mtf");
         roundtrip(b"");
-        roundtrip(include_bin!("../data/test.txt"));
+        roundtrip(include_bytes!("../data/test.txt"));
     }
 
     #[bench]
     fn encode_speed(bh: &mut Bencher) {
-        let input = include_bin!("../data/test.txt");
+        let input = include_bytes!("../data/test.txt");
         let mem = io::MemWriter::with_capacity(input.len());
         let mut e = Encoder::new(mem);
         bh.iter(|| {
@@ -202,7 +202,7 @@ mod test {
 
     #[bench]
     fn decode_speed(bh: &mut Bencher) {
-        let input = include_bin!("../data/test.txt");
+        let input = include_bytes!("../data/test.txt");
         let mut e = Encoder::new(io::MemWriter::new());
         e.write(input).unwrap();
         let encoded = e.finish().into_inner();

@@ -132,11 +132,11 @@ pub fn main() {
             },
             _ => () //OK
         }
-        let methods = Vec::from_fn(input.read_u8().unwrap() as uint, |_| {
+        let methods: Vec<_> = range(0, input.read_u8().unwrap() as uint).map(|_| {
             let len = input.read_u8().unwrap() as uint;
             let bytes = input.read_exact(len).unwrap();
             str::from_utf8(bytes.as_slice()).unwrap().to_string()
-        });
+        }).collect();
         let mut rsum: Box<Reader> = box input;
         for met in methods.iter() {
             info!("Found pass {}", *met);

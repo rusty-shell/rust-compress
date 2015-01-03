@@ -13,7 +13,7 @@ Matt Mahoney for the wonderful 'bbb' commented source
 
 */
 
-use std::num::Float;
+use std::num::{Float, ToPrimitive};
 use super::Border;
 pub type FlatProbability = u16;
 pub type WideProbability = i16;
@@ -30,7 +30,7 @@ const PORTAL_BINS: uint = 2*PORTAL_OFFSET + 1;
 
 
 /// Bit probability model
-#[deriving(Copy)]
+#[derive(Copy)]
 pub struct Bit(FlatProbability);
 
 impl Bit {

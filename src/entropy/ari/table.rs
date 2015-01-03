@@ -33,7 +33,7 @@ pub struct Model {
 impl Model {
     /// Create a new table with frequencies initialized by a function
     pub fn new_custom(num_values: uint, threshold: Border, fn_init: |uint|-> Frequency) -> Model {
-        let freq = Vec::from_fn(num_values, |i| fn_init(i));
+        let freq: Vec<Frequency> = range(0, num_values).map(|i| fn_init(i)).collect();
         let total = freq.iter().fold(0 as Border, |u,&f| u+(f as Border));
         let mut ft = Model {
             total: total,
