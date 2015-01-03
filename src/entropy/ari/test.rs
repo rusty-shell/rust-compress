@@ -1,8 +1,9 @@
 use std::io::{BufReader, BufWriter, MemWriter, SeekSet};
+use std::iter::repeat;
 use std::vec::Vec;
 use test::Bencher;
 
-static TEXT_INPUT: &'static [u8] = include_bin!("../../data/test.txt");
+static TEXT_INPUT: &'static [u8] = include_bytes!("../../data/test.txt");
 
 
 fn roundtrip(bytes: &[u8]) {
@@ -210,7 +211,7 @@ fn roundtrips_apm() {
 
 #[bench]
 fn compress_speed(bh: &mut Bencher) {
-    let mut storage = Vec::from_elem(TEXT_INPUT.len(), 0u8);
+    let mut storage: Vec<u8> = repeat(0u8).take(TEXT_INPUT.len()).collect();
     bh.iter(|| {
         let mut w = BufWriter::new(storage.as_mut_slice());
         w.seek(0, SeekSet).unwrap();

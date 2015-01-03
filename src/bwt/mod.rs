@@ -49,8 +49,9 @@ This is an original (mostly trivial) implementation.
 
 #![allow(missing_docs)]
 
-use std::{cmp, fmt, io, iter, slice};
-use std::num::NumCast;
+use std::{cmp, fmt, io, slice};
+use std::iter::{self, Extend, repeat};
+use std::num::{NumCast, ToPrimitive};
 
 
 pub mod dc;
@@ -205,7 +206,7 @@ pub fn encode<'a, SUF: NumCast + ToPrimitive + fmt::Show>(input: &'a [Symbol], s
 /// Transform an input block into the output slice, all-inclusive version.
 /// Returns the index of the original string in the output matrix.
 pub fn encode_simple(input: &[Symbol]) -> (Vec<Symbol>, uint) {
-    let mut suf_array = Vec::from_elem(input.len(), 0u);
+    let mut suf_array: Vec<uint> = repeat(0).take(input.len()).collect();
     let mut iter = encode(input, suf_array.as_mut_slice());
     let output: Vec<Symbol> = iter.by_ref().collect();
     (output, iter.get_origin())
@@ -278,7 +279,7 @@ pub fn decode<'a, SUF: NumCast + fmt::Show>(input: &'a [Symbol], origin: uint, t
 
 /// A simplified BWT decode function, which allocates a temporary suffix array
 pub fn decode_simple(input: &[Symbol], origin: uint) -> Vec<Symbol> {
-    let mut suf = Vec::from_elem(input.len(), 0 as uint);
+    let mut suf: Vec<uint> = repeat(0).take(input.len()).collect();
     decode(input, origin, suf.as_mut_slice()).take(input.len()).collect()
 }
 
@@ -377,12 +378,12 @@ impl<R: Reader> Decoder<R> {
 
         if self.extra_memory    {
             self.table.truncate(0);
-            self.table.grow_fn(n, |_| 0);
+            self.table.extend(range(0, n).map(|_| 0));
             for ch in decode(self.temp.as_slice(), origin, self.table.as_mut_slice()) {
                 self.output.push(ch);
             }
         }else   {
-            self.output.grow_fn(n, |_| 0);
+            self.output.extend(range(0, n).map(|_| 0));
             decode_minimal(self.temp.as_slice(), origin, self.output.as_mut_slice());
         }
 
@@ -456,7 +457,7 @@ impl<W: Writer> Encoder<W> {
         try!(self.w.write_le_u32(n as u32));
 
         self.suf.truncate(0);
-        self.suf.grow_fn(n, |_| n);
+        self.suf.extend(range(0, n).map(|_| n));
         let w = &mut self.w;
 
         {
@@ -514,6 +515,7 @@ impl<W: Writer> Writer for Encoder<W> {
 #[cfg(test)]
 mod test {
     use std::io::{BufReader, MemWriter};
+    use std::iter::repeat;
     use test::Bencher;
     use super::{encode, decode, Decoder, Encoder};
 
@@ -533,7 +535,7 @@ mod test {
     fn some_roundtrips() {
         roundtrip(b"test", true);
         roundtrip(b"", true);
-        roundtrip(include_bin!("../data/test.txt"), true);
+        roundtrip(include_bytes!("../data/test.txt"), true);
     }
 
     #[test]
@@ -543,9 +545,9 @@ mod test {
 
     #[bench]
     fn decode_speed(bh: &mut Bencher) {
-        let input = include_bin!("../data/test.txt");
+        let input = include_bytes!("../data/test.txt");
         let n = input.len();
-        let mut suf = Vec::from_elem(n, 0u16);
+        let mut suf: Vec<u16> = repeat(0).take(n).collect();
         let (output, origin) = {
             let mut to_iter = encode(input, suf.as_mut_slice());
             let out: Vec<u8> = to_iter.by_ref().collect();

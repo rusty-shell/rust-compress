@@ -492,28 +492,28 @@ mod test {
 
     #[test]
     fn decode() {
-        let reference = include_bin!("data/test.txt");
-        test_decode(include_bin!("data/test.z.0"), reference);
-        test_decode(include_bin!("data/test.z.1"), reference);
-        test_decode(include_bin!("data/test.z.2"), reference);
-        test_decode(include_bin!("data/test.z.3"), reference);
-        test_decode(include_bin!("data/test.z.4"), reference);
-        test_decode(include_bin!("data/test.z.5"), reference);
-        test_decode(include_bin!("data/test.z.6"), reference);
-        test_decode(include_bin!("data/test.z.7"), reference);
-        test_decode(include_bin!("data/test.z.8"), reference);
-        test_decode(include_bin!("data/test.z.9"), reference);
+        let reference = include_bytes!("data/test.txt");
+        test_decode(include_bytes!("data/test.z.0"), reference);
+        test_decode(include_bytes!("data/test.z.1"), reference);
+        test_decode(include_bytes!("data/test.z.2"), reference);
+        test_decode(include_bytes!("data/test.z.3"), reference);
+        test_decode(include_bytes!("data/test.z.4"), reference);
+        test_decode(include_bytes!("data/test.z.5"), reference);
+        test_decode(include_bytes!("data/test.z.6"), reference);
+        test_decode(include_bytes!("data/test.z.7"), reference);
+        test_decode(include_bytes!("data/test.z.8"), reference);
+        test_decode(include_bytes!("data/test.z.9"), reference);
     }
 
     #[test]
     fn large() {
-        let reference = include_bin!("data/test.large");
-        test_decode(include_bin!("data/test.large.z.5"), reference);
+        let reference = include_bytes!("data/test.large");
+        test_decode(include_bytes!("data/test.large.z.5"), reference);
     }
 
     #[test]
     fn one_byte_at_a_time() {
-        let input = include_bin!("data/test.z.1");
+        let input = include_bytes!("data/test.z.1");
         let mut d = Decoder::new(BufReader::new(fixup(input)));
         assert!(!d.eof());
         let mut out = Vec::new();
@@ -524,12 +524,12 @@ mod test {
             }
         }
         assert!(d.eof());
-        assert!(out.as_slice() == include_bin!("data/test.txt"));
+        assert!(out.as_slice() == include_bytes!("data/test.txt"));
     }
 
     #[test]
     fn random_byte_lengths() {
-        let input = include_bin!("data/test.z.1");
+        let input = include_bytes!("data/test.z.1");
         let mut d = Decoder::new(BufReader::new(fixup(input)));
         let mut out = Vec::new();
         let mut buf = [0u8; 40];
@@ -541,7 +541,7 @@ mod test {
                 Err(..) => break
             }
         }
-        assert!(out.as_slice() == include_bin!("data/test.txt"));
+        assert!(out.as_slice() == include_bytes!("data/test.txt"));
     }
 
     //fn roundtrip(bytes: &[u8]) {
@@ -558,12 +558,12 @@ mod test {
     //fn some_roundtrips() {
     //    roundtrip(bytes!("test"));
     //    roundtrip(bytes!(""));
-    //    roundtrip(include_bin!("data/test.txt"));
+    //    roundtrip(include_bytes!("data/test.txt"));
     //}
 
     #[bench]
     fn decompress_speed(bh: &mut test::Bencher) {
-        let input = include_bin!("data/test.z.9");
+        let input = include_bytes!("data/test.z.9");
         let mut d = Decoder::new(BufReader::new(fixup(input)));
         let mut output = [0u8; 65536];
         let mut output_size = 0;

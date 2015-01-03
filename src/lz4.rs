@@ -23,8 +23,9 @@ can be found at https://github.com/bkaradzic/go-lz4.
 
 */
 
-use std::io;
 use std::cmp;
+use std::io;
+use std::iter::repeat;
 use std::slice;
 use std::vec::Vec;
 
@@ -587,7 +588,7 @@ pub fn encode_block(input: &[u8], output: &mut Vec<u8>) -> uint {
     let mut encoder = BlockEncoder {
         input: input,
         output: output,
-        hash_table: Vec::from_elem(HASH_TABLE_SIZE as uint, 0),
+        hash_table: repeat(0).take(HASH_TABLE_SIZE as uint).collect(),
         pos: 0,
         anchor: 0,
         dest_pos: 0
@@ -612,21 +613,21 @@ mod test {
 
     #[test]
     fn decode() {
-        let reference = include_bin!("data/test.txt");
-        test_decode(include_bin!("data/test.lz4.1"), reference);
-        test_decode(include_bin!("data/test.lz4.2"), reference);
-        test_decode(include_bin!("data/test.lz4.3"), reference);
-        test_decode(include_bin!("data/test.lz4.4"), reference);
-        test_decode(include_bin!("data/test.lz4.5"), reference);
-        test_decode(include_bin!("data/test.lz4.6"), reference);
-        test_decode(include_bin!("data/test.lz4.7"), reference);
-        test_decode(include_bin!("data/test.lz4.8"), reference);
-        test_decode(include_bin!("data/test.lz4.9"), reference);
+        let reference = include_bytes!("data/test.txt");
+        test_decode(include_bytes!("data/test.lz4.1"), reference);
+        test_decode(include_bytes!("data/test.lz4.2"), reference);
+        test_decode(include_bytes!("data/test.lz4.3"), reference);
+        test_decode(include_bytes!("data/test.lz4.4"), reference);
+        test_decode(include_bytes!("data/test.lz4.5"), reference);
+        test_decode(include_bytes!("data/test.lz4.6"), reference);
+        test_decode(include_bytes!("data/test.lz4.7"), reference);
+        test_decode(include_bytes!("data/test.lz4.8"), reference);
+        test_decode(include_bytes!("data/test.lz4.9"), reference);
     }
 
     #[test]
     fn raw_encode_block() {
-        let data = include_bin!("data/test.txt");
+        let data = include_bytes!("data/test.txt");
         let mut encoded = Vec::new();
 
         super::encode_block(data, &mut encoded);
@@ -639,7 +640,7 @@ mod test {
 
     #[test]
     fn one_byte_at_a_time() {
-        let input = include_bin!("data/test.lz4.1");
+        let input = include_bytes!("data/test.lz4.1");
         let mut d = Decoder::new(BufReader::new(input));
         assert!(!d.eof());
         let mut out = Vec::new();
@@ -650,12 +651,12 @@ mod test {
             }
         }
         assert!(d.eof());
-        assert!(out.as_slice() == include_bin!("data/test.txt"));
+        assert!(out.as_slice() == include_bytes!("data/test.txt"));
     }
 
     #[test]
     fn random_byte_lengths() {
-        let input = include_bin!("data/test.lz4.1");
+        let input = include_bytes!("data/test.lz4.1");
         let mut d = Decoder::new(BufReader::new(input));
         let mut out = Vec::new();
         let mut buf = [0u8; 40];
@@ -667,7 +668,7 @@ mod test {
                 Err(..) => break
             }
         }
-        assert!(out.as_slice() == include_bin!("data/test.txt"));
+        assert!(out.as_slice() == include_bytes!("data/test.txt"));
     }
 
     fn roundtrip(bytes: &[u8]) {
@@ -686,12 +687,12 @@ mod test {
     fn some_roundtrips() {
         roundtrip(b"test");
         roundtrip(b"");
-        roundtrip(include_bin!("data/test.txt"));
+        roundtrip(include_bytes!("data/test.txt"));
     }
 
     #[bench]
     fn decompress_speed(bh: &mut test::Bencher) {
-        let input = include_bin!("data/test.lz4.9");
+        let input = include_bytes!("data/test.lz4.9");
         let mut d = Decoder::new(BufReader::new(input));
         let mut output = [0u8; 65536];
         let mut output_size = 0;

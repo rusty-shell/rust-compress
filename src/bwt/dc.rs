@@ -24,9 +24,10 @@ Thanks to Edgar Binder for inventing DC!
 
 */
 
-use std::{io, iter};
+use std::io;
+use std::iter::{self, repeat};
 use std::slice as vec;
-use std::num::NumCast;
+use std::num::{NumCast, ToPrimitive};
 use super::mtf::MTF;
 
 pub type Symbol = u8;
@@ -35,7 +36,7 @@ pub const TOTAL_SYMBOLS: uint = 0x100;
 
 /// Distance coding context
 /// Has all the information potentially needed by the underlying coding model
-#[deriving(PartialEq, Eq, Show)]
+#[derive(PartialEq, Eq, Show)]
 pub struct Context {
     /// current symbol
     pub symbol: Symbol,
@@ -150,9 +151,9 @@ pub fn encode<'a, 'b, D: Clone + Copy + Eq + NumCast>(input: &'a [Symbol], dista
 /// Encode version with "batteries included" for quick testing
 pub fn encode_simple<D: Clone + Copy + Eq + NumCast>(input: &[Symbol]) -> Vec<D> {
     let n = input.len();
-    let mut raw_dist: Vec<D> = Vec::from_elem(n, NumCast::from(0i).unwrap());
+    let mut raw_dist: Vec<D> = repeat(NumCast::from(0i).unwrap()).take(n).collect();
     let mut eniter = encode(input, raw_dist.as_mut_slice(), &mut MTF::new());
-    let init: Vec<D> = Vec::from_fn(TOTAL_SYMBOLS, |i| NumCast::from(eniter.get_init()[i]).unwrap());
+    let init: Vec<D> = range(0, TOTAL_SYMBOLS).map(|i| NumCast::from(eniter.get_init()[i]).unwrap()).collect();
     init.iter().map(|d| d.clone()).chain(eniter.by_ref().map(|(d,_)| d)).collect()
 }
 
@@ -230,7 +231,7 @@ pub fn decode(mut next: [uint; TOTAL_SYMBOLS], output: &mut [Symbol], mtf: &mut 
 
 /// Decode version with "batteries included" for quick testing
 pub fn decode_simple<D: ToPrimitive>(n: uint, distances: &[D]) -> Vec<Symbol> {
-    let mut output = Vec::from_elem(n, 0 as Symbol);
+    let mut output: Vec<Symbol> = repeat(0 as Symbol).take(n).collect();
     let mut init = [0u; TOTAL_SYMBOLS];
     for i in range(0, TOTAL_SYMBOLS) {
         init[i] = distances[i].to_uint().unwrap();
@@ -250,6 +251,8 @@ pub fn decode_simple<D: ToPrimitive>(n: uint, distances: &[D]) -> Vec<Symbol> {
 
 #[cfg(test)]
 mod test {
+    use std::iter::repeat;
+
     fn roundtrip(bytes: &[u8]) {
         info!("Roundtrip DC of size {}", bytes.len());
         let distances = super::encode_simple::<uint>(bytes);
@@ -263,15 +266,15 @@ mod test {
         let n = bytes.len();
         info!("Roundtrip DC context of size {}", n);
         let mut mtf = super::super::mtf::MTF::new();
-        let mut raw_dist = Vec::from_elem(n, 0u16);
+        let mut raw_dist: Vec<u16> = repeat(0).take(n).collect();
         let eniter = super::encode(bytes, raw_dist.as_mut_slice(), &mut mtf);
         let mut init = [0u; super::TOTAL_SYMBOLS];
         for i in range(0u, super::TOTAL_SYMBOLS) {
             init[i] = eniter.get_init()[i];
         }
         // implicit iterator copies, or we can gather in one pass and then split
-        let (distances, contexts) = ::std::vec::unzip(eniter);
-        let mut output = Vec::from_elem(n, 0u8);
+        let (distances, contexts): (Vec<_>, Vec<_>) = eniter.unzip();
+        let mut output: Vec<u8> = repeat(0).take(n).collect();
         let mut di = 0u;
         super::decode(init, output.as_mut_slice(), &mut mtf, |ctx| {
             assert_eq!(contexts.as_slice()[di], ctx);
@@ -286,7 +289,7 @@ mod test {
     fn roundtrips() {
         roundtrip(b"teeesst_dc");
         roundtrip(b"");
-        roundtrip(include_bin!("../data/test.txt"));
+        roundtrip(include_bytes!("../data/test.txt"));
     }
 
     #[test]
