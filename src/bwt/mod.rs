@@ -183,7 +183,8 @@ impl<'a, SUF> TransformIterator<'a, SUF> {
     }
 }
 
-impl<'a, SUF: ToPrimitive + 'a> Iterator<Symbol> for TransformIterator<'a, SUF> {
+impl<'a, SUF: ToPrimitive + 'a> Iterator for TransformIterator<'a, SUF> {
+    type Item = Symbol;
     fn next(&mut self) -> Option<Symbol> {
         self.suf_iter.next().map(|(i,p)| {
             if p.to_uint().unwrap() == 0 {
@@ -254,7 +255,8 @@ impl<'a, SUF> InverseIterator<'a, SUF> {
     }
 }
 
-impl<'a, SUF: ToPrimitive> Iterator<Symbol> for InverseIterator<'a, SUF> {
+impl<'a, SUF: ToPrimitive> Iterator for InverseIterator<'a, SUF> {
+    type Item = Symbol;
     fn next(&mut self) -> Option<Symbol> {
         if self.current == -1 {
             None
