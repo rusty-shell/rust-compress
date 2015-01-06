@@ -159,8 +159,10 @@ pub fn encode_simple<D: Clone + Copy + Eq + NumCast>(input: &[Symbol]) -> Vec<D>
 }
 
 /// Decode a block of distances given the initial symbol positions
-pub fn decode(mut next: [uint; TOTAL_SYMBOLS], output: &mut [Symbol], mtf: &mut MTF,
-        fn_dist: |Context|->io::IoResult<uint>) -> io::IoResult<()> {
+pub fn decode<F>(mut next: [uint; TOTAL_SYMBOLS], output: &mut [Symbol], mtf: &mut MTF,
+                 mut fn_dist: F) -> io::IoResult<()>
+    where F: FnMut(Context) -> io::IoResult<uint>
+{
 
     let n = output.len();
     let mut i = 0u;

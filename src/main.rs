@@ -33,9 +33,10 @@ impl Config {
             block_size: 1<<16,
             decompress: false,
         };
-        let mut handlers: HashMap<&str,|&str, &mut Config|> = HashMap::new();
-        handlers.insert("d",|_, cfg| { cfg.decompress = true; });
-        handlers.insert("block",|b, cfg| {
+        let mut handlers: HashMap<&str, Box<FnMut(&str, &mut Config)>> =
+            HashMap::new();
+        handlers.insert("d", box |_, cfg| { cfg.decompress = true; });
+        handlers.insert("block", box |b, cfg| {
             cfg.block_size = b.parse().unwrap();
         });
 
@@ -55,8 +56,10 @@ impl Config {
 }
 
 struct Pass {
-    encode: |Box<Writer + 'static>, &Config|: 'static -> Box<Writer + 'static>,
-    decode: |Box<Reader + 'static>, &Config|: 'static -> Box<Reader + 'static>,
+    encode: Box<FnMut(Box<Writer + 'static>, &Config)
+                      -> Box<Writer + 'static> + 'static>,
+    decode: Box<FnMut(Box<Reader + 'static>, &Config)
+                      -> Box<Reader + 'static> + 'static>,
     info: String,
 }
 
@@ -65,33 +68,33 @@ struct Pass {
 pub fn main() {
     let mut passes: HashMap<String,Pass> = HashMap::new();
     passes.insert("dummy".to_string(), Pass {
-        encode: |w,_| w,
-        decode: |r,_| r,
+        encode: box |w,_| w,
+        decode: box |r,_| r,
         info: "pass-through".to_string(),
     });
     passes.insert("ari".to_string(), Pass {
-        encode: |w,_c| {
+        encode: box |w,_c| {
             box ari::ByteEncoder::new(w) as Box<Writer + 'static>
         },
-        decode: |r,_c| {
+        decode: box |r,_c| {
             box ari::ByteDecoder::new(r) as Box<Reader + 'static>
         },
         info: "Adaptive arithmetic byte coder".to_string(),
     });
     passes.insert("bwt".to_string(), Pass {
-        encode: |w,c| {
+        encode: box |w,c| {
             box bwt::Encoder::new(w, c.block_size) as Box<Writer + 'static>
         },
-        decode: |r,_c| {
+        decode: box |r,_c| {
             box bwt::Decoder::new(r, true) as Box<Reader + 'static>
         },
         info: "Burrows-Wheeler Transformation".to_string(),
     });
     passes.insert("mtf".to_string(), Pass {
-        encode: |w,_c| {
+        encode: box |w,_c| {
             box bwt::mtf::Encoder::new(w) as Box<Writer + 'static>
         },
-        decode: |r,_c| {
+        decode: box |r,_c| {
             box bwt::mtf::Decoder::new(r) as Box<Reader + 'static>
         },
         info: "Move-To-Front Transformation".to_string(),
@@ -107,10 +110,10 @@ pub fn main() {
         info: ~"Standardized Ziv-Lempel + Huffman variant",
     });*/
     passes.insert("lz4".to_string(), Pass {
-        encode: |w,_c| {
+        encode: box |w,_c| {
             box lz4::Encoder::new(w) as Box<Writer + 'static>
         },
-        decode: |r,_c| { // LZ4 decoder seem to work
+        decode: box |r,_c| { // LZ4 decoder seem to work
             box lz4::Decoder::new(r) as Box<Reader + 'static>
         },
         info: "Ziv-Lempel derivative, focused at speed".to_string(),
