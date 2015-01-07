@@ -1,5 +1,4 @@
 #![crate_type = "bin"]
-#![feature(macro_rules, phase)]
 
 //! A rust-compress application that allows testing of implemented
 //! algorithms and their combinations using a simple command line.
@@ -7,7 +6,7 @@
 //! echo -n "abracadabra" | ./app bwt | xxd
 //! echo "banana" | ./app bwt | ./app -d
 
-#[phase(plugin, link)] extern crate log;
+#[macro_use] extern crate log;
 extern crate compress;
 
 use std::collections::HashMap;

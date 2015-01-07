@@ -179,7 +179,7 @@ pub trait Model<V: Copy + Show> {
     fn encode(&self, value: V, re: &mut RangeEncoder, out: &mut [Symbol]) -> uint {
         let (lo, hi) = self.get_range(value);
         let total = self.get_denominator();
-        debug!("\tEncoding value {} of range [{}-{}) with total {}", value, lo, hi, total);
+        debug!("\tEncoding value {:?} of range [{}-{}) with total {}", value, lo, hi, total);
         re.process(total, lo, hi, out)
     }
 
@@ -189,7 +189,7 @@ pub trait Model<V: Copy + Show> {
         let total = self.get_denominator();
         let offset = re.query(total, code);
         let (value, lo, hi) = self.find_value(offset);
-        debug!("\tDecoding value {} of offset {} with total {}", value, offset, total);
+        debug!("\tDecoding value {:?} of offset {} with total {}", value, offset, total);
         let mut out = [0 as Symbol; BORDER_BYTES];
         let shift = re.process(total, lo, hi, out.as_mut_slice());
         debug_assert_eq!(if shift==0 {0} else {code>>(BORDER_BITS - shift*8)},
