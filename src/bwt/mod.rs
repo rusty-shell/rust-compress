@@ -157,7 +157,7 @@ pub fn compute_suffixes<SUF: NumCast + ToPrimitive + fmt::Show>(input: &[Symbol]
         });
     }
 
-    debug!("sorted SA: {}", suf_array);
+    debug!("sorted SA: {:?}", suf_array);
 }
 
 /// An iterator over BWT output
@@ -230,7 +230,7 @@ pub fn compute_inversion_table<SUF: NumCast + fmt::Show>(input: &[Symbol], origi
         table[radix.place(ch)] = NumCast::from(origin+2+i).unwrap();
     }
     //table[-1] = origin;
-    debug!("inverse table: {}", table)
+    debug!("inverse table: {:?}", table)
 }
 
 /// An iterator over inverse BWT

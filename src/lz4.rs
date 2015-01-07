@@ -389,7 +389,7 @@ impl<R: Reader> Decoder<R> {
         debug!("blk: {}", self.blk_checksum);
         debug!("stream: {}", self.stream_checksum);
         debug!("max size: {}", max_block_size);
-        debug!("stream size: {}", size);
+        debug!("stream size: {:?}", size);
 
         self.max_block_size = max_block_size;
 
