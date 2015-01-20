@@ -1,6 +1,7 @@
 #![crate_name = "compress"]
 #![deny(missing_docs)]
 #![allow(missing_copy_implementations)]
+#![allow(unstable)]
 
 //! dox (placeholder)
 

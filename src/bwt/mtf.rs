@@ -33,7 +33,7 @@ use std::{io, iter, mem};
 
 pub type Symbol = u8;
 pub type Rank = u8;
-pub const TOTAL_SYMBOLS: uint = 0x100;
+pub const TOTAL_SYMBOLS: usize = 0x100;
 
 
 /// MoveToFront encoder/decoder
@@ -63,12 +63,12 @@ impl MTF {
         }
         let mut rank: Rank = 1;
         loop {
-            mem::swap(&mut self.symbols[rank as uint], &mut next);
+            mem::swap(&mut self.symbols[rank as usize], &mut next);
             if next == sym {
                 break;
             }
             rank += 1;
-            assert!((rank as uint) < self.symbols.len());
+            assert!((rank as usize) < self.symbols.len());
         }
         self.symbols[0] = sym;
         rank
@@ -76,9 +76,9 @@ impl MTF {
 
     /// decode a rank into its symbol
     pub fn decode(&mut self, rank: Rank) -> Symbol {
-        let sym = self.symbols[rank as uint];
+        let sym = self.symbols[rank as usize];
         debug!("\tDecoding rank {} with symbol {}", rank, sym);
-        for i in iter::range_inclusive(1,rank as uint).rev() {
+        for i in iter::range_inclusive(1,rank as usize).rev() {
             self.symbols[i] = self.symbols[i-1];
         }
         self.symbols[0] = sym;
@@ -149,8 +149,8 @@ impl<R> Decoder<R> {
 }
 
 impl<R: Reader> Reader for Decoder<R> {
-    fn read(&mut self, dst: &mut [u8]) -> io::IoResult<uint> {
-        let mut bytes_read = 0u;
+    fn read(&mut self, dst: &mut [u8]) -> io::IoResult<usize> {
+        let mut bytes_read = 0;
         for sym in dst.iter_mut() {
             let rank = match self.r.read_u8() {
                 Ok(r) => r,
@@ -176,7 +176,7 @@ mod test {
         let mut e = Encoder::new(io::MemWriter::new());
         e.write(bytes).unwrap();
         let encoded = e.finish().into_inner();
-        debug!("Roundtrip MTF input: {}, ranks: {}", bytes, encoded);
+        debug!("Roundtrip MTF input: {:?}, ranks: {:?}", bytes, encoded);
         let mut d = Decoder::new(io::BufReader::new(encoded.as_slice()));
         let decoded = d.read_to_end().unwrap();
         assert_eq!(decoded.as_slice(), bytes);

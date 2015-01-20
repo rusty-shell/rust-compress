@@ -1,5 +1,7 @@
 #![crate_type = "bin"]
 
+#![allow(unstable)]
+#![feature(box_syntax)]
 //! A rust-compress application that allows testing of implemented
 //! algorithms and their combinations using a simple command line.
 //! Example invocations:
@@ -20,7 +22,7 @@ static MAGIC    : u32   = 0x73632172;   //=r!cs
 struct Config {
     exe_name: String,
     methods: Vec<String>,
-    block_size: uint,
+    block_size: usize,
     decompress: bool,
 }
 
@@ -134,8 +136,8 @@ pub fn main() {
             },
             _ => () //OK
         }
-        let methods: Vec<_> = range(0, input.read_u8().unwrap() as uint).map(|_| {
-            let len = input.read_u8().unwrap() as uint;
+        let methods: Vec<_> = range(0, input.read_u8().unwrap() as usize).map(|_| {
+            let len = input.read_u8().unwrap() as usize;
             let bytes = input.read_exact(len).unwrap();
             str::from_utf8(bytes.as_slice()).unwrap().to_string()
         }).collect();

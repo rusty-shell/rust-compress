@@ -60,12 +60,12 @@ pub mod mtf;
 /// A base element for the transformation
 pub type Symbol = u8;
 
-pub const ALPHABET_SIZE: uint = 0x100;
+pub const ALPHABET_SIZE: usize = 0x100;
 
 /// Radix sorting primitive
 pub struct Radix    {
     /// number of occurancies (frequency) per symbox
-    pub freq    : [uint; ALPHABET_SIZE+1],
+    pub freq    : [usize; ALPHABET_SIZE+1],
 }
 
 impl Radix  {
@@ -87,7 +87,7 @@ impl Radix  {
     /// count elements in the input
     pub fn gather(&mut self, input: &[Symbol])  {
         for &b in input.iter()  {
-            self.freq[b as uint] += 1;
+            self.freq[b as usize] += 1;
         }
     }
 
@@ -102,12 +102,12 @@ impl Radix  {
     }
 
     /// return next byte position, advance it internally
-    pub fn place(&mut self, b: Symbol)-> uint   {
-        let pos = self.freq[b as uint];
-        assert!(self.freq[b as uint] < self.freq[(b as uint)+1],
+    pub fn place(&mut self, b: Symbol)-> usize   {
+        let pos = self.freq[b as usize];
+        assert!(self.freq[b as usize] < self.freq[(b as usize)+1],
             "Unable to place symbol {} at offset {}",
             b, pos);
-        self.freq[b as uint] += 1;
+        self.freq[b as usize] += 1;
         pos
     }
 
@@ -131,8 +131,8 @@ pub fn compute_suffixes<SUF: NumCast + ToPrimitive + fmt::Show>(input: &[Symbol]
     radix.gather(input);
     radix.accumulate();
 
-    debug!("SA compute input: {}", input);
-    debug!("radix offsets: {}", radix.freq.as_slice());
+    debug!("SA compute input: {:?}", input);
+    debug!("radix offsets: {:?}", radix.freq.as_slice());
 
     for (i,&ch) in input.iter().enumerate() {
         let p = radix.place(ch);
@@ -164,7 +164,7 @@ pub fn compute_suffixes<SUF: NumCast + ToPrimitive + fmt::Show>(input: &[Symbol]
 pub struct TransformIterator<'a, SUF: 'a> {
     input      : &'a [Symbol],
     suf_iter   : iter::Enumerate<slice::Iter<'a,SUF>>,
-    origin     : Option<uint>,
+    origin     : Option<usize>,
 }
 
 impl<'a, SUF> TransformIterator<'a, SUF> {
@@ -178,7 +178,7 @@ impl<'a, SUF> TransformIterator<'a, SUF> {
     }
 
     /// return the index of the original string
-    pub fn get_origin(&self) -> uint {
+    pub fn get_origin(&self) -> usize {
         self.origin.unwrap()
     }
 }
@@ -206,8 +206,8 @@ pub fn encode<'a, SUF: NumCast + ToPrimitive + fmt::Show>(input: &'a [Symbol], s
 
 /// Transform an input block into the output slice, all-inclusive version.
 /// Returns the index of the original string in the output matrix.
-pub fn encode_simple(input: &[Symbol]) -> (Vec<Symbol>, uint) {
-    let mut suf_array: Vec<uint> = repeat(0).take(input.len()).collect();
+pub fn encode_simple(input: &[Symbol]) -> (Vec<Symbol>, usize) {
+    let mut suf_array: Vec<usize> = repeat(0).take(input.len()).collect();
     let mut iter = encode(input, suf_array.as_mut_slice());
     let output: Vec<Symbol> = iter.by_ref().collect();
     (output, iter.get_origin())
@@ -215,14 +215,14 @@ pub fn encode_simple(input: &[Symbol]) -> (Vec<Symbol>, uint) {
 
 
 /// Compute an inversion jump table, needed for BWT decoding
-pub fn compute_inversion_table<SUF: NumCast + fmt::Show>(input: &[Symbol], origin: uint, table: &mut [SUF]) {
+pub fn compute_inversion_table<SUF: NumCast + fmt::Show>(input: &[Symbol], origin: usize, table: &mut [SUF]) {
     assert_eq!(input.len(), table.len());
 
     let mut radix = Radix::new();
     radix.gather(input);
     radix.accumulate();
 
-    table[radix.place(input[origin])] = NumCast::from(0i).unwrap();
+    table[radix.place(input[origin])] = NumCast::from(0).unwrap();
     for (i,&ch) in input.slice_to(origin).iter().enumerate() {
         table[radix.place(ch)] = NumCast::from(i+1).unwrap();
     }
@@ -238,14 +238,14 @@ pub fn compute_inversion_table<SUF: NumCast + fmt::Show>(input: &[Symbol], origi
 pub struct InverseIterator<'a, SUF: 'a> {
     input      : &'a [Symbol],
     table      : &'a [SUF],
-    origin     : uint,
-    current    : uint,
+    origin     : usize,
+    current    : usize,
 }
 
 impl<'a, SUF> InverseIterator<'a, SUF> {
     /// create a new inverse BWT iterator with a given input, origin, and a jump table
-    pub fn new(input: &'a [Symbol], origin: uint, table: &'a [SUF]) -> InverseIterator<'a, SUF> {
-        debug!("inverse origin={}, input: {}", origin, input);
+    pub fn new(input: &'a [Symbol], origin: usize, table: &'a [SUF]) -> InverseIterator<'a, SUF> {
+        debug!("inverse origin={:?}, input: {:?}", origin, input);
         InverseIterator {
             input: input,
             table: table,
@@ -274,20 +274,20 @@ impl<'a, SUF: ToPrimitive> Iterator for InverseIterator<'a, SUF> {
 }
 
 /// Decode a BWT block, given it's origin, and using 'table' temporarily
-pub fn decode<'a, SUF: NumCast + fmt::Show>(input: &'a [Symbol], origin: uint, table: &'a mut [SUF]) -> InverseIterator<'a, SUF> {
+pub fn decode<'a, SUF: NumCast + fmt::Show>(input: &'a [Symbol], origin: usize, table: &'a mut [SUF]) -> InverseIterator<'a, SUF> {
     compute_inversion_table(input, origin, table);
     InverseIterator::new(input, origin, table)
 }
 
 /// A simplified BWT decode function, which allocates a temporary suffix array
-pub fn decode_simple(input: &[Symbol], origin: uint) -> Vec<Symbol> {
-    let mut suf: Vec<uint> = repeat(0).take(input.len()).collect();
+pub fn decode_simple(input: &[Symbol], origin: usize) -> Vec<Symbol> {
+    let mut suf: Vec<usize> = repeat(0).take(input.len()).collect();
     decode(input, origin, suf.as_mut_slice()).take(input.len()).collect()
 }
 
 /// Decode without additional memory, can be greatly optimized
 /// Run time: O(n^2), Memory: 0n
-fn decode_minimal(input: &[Symbol], origin: uint, output: &mut [Symbol]) {
+fn decode_minimal(input: &[Symbol], origin: usize, output: &mut [Symbol]) {
     assert_eq!(input.len(), output.len());
     if input.len() == 0 {
         assert_eq!(origin, 0);
@@ -302,7 +302,7 @@ fn decode_minimal(input: &[Symbol], origin: uint, output: &mut [Symbol]) {
         let ch = input[i];
         output[n-j-1] = ch;
         let offset = input.slice_to(i).iter().filter(|&k| *k==ch).count();
-        radix.freq[ch as uint] + offset
+        radix.freq[ch as usize] + offset
     });
 }
 
@@ -315,14 +315,14 @@ pub struct Decoder<R> {
     /// of. Note that if data is read from the reader while decoding is in
     /// progress the output stream will get corrupted.
     pub r: R,
-    start  : uint,
+    start  : usize,
 
     temp   : Vec<u8>,
     output : Vec<u8>,
-    table  : Vec<uint>,
+    table  : Vec<usize>,
 
     header         : bool,
-    max_block_size : uint,
+    max_block_size : usize,
     extra_memory   : bool,
 }
 
@@ -354,7 +354,7 @@ impl<R: Reader> Decoder<R> {
     fn read_header(&mut self) -> io::IoResult<()> {
         match self.r.read_le_u32() {
             Ok(size) => {
-                self.max_block_size = size as uint;
+                self.max_block_size = size as usize;
                 debug!("max size: {}", self.max_block_size);
                 Ok(())
             },
@@ -364,7 +364,7 @@ impl<R: Reader> Decoder<R> {
 
     fn decode_block(&mut self) -> io::IoResult<bool> {
         let n = match self.r.read_le_u32() {
-            Ok(n) => n as uint,
+            Ok(n) => n as usize,
             Err(ref e) if e.kind == io::EndOfFile => return Ok(false),
             Err(e) => return Err(e),
         };
@@ -374,7 +374,7 @@ impl<R: Reader> Decoder<R> {
         self.temp.reserve(n);
         try!(self.r.push_at_least(n, n, &mut self.temp));
 
-        let origin = try!(self.r.read_le_u32()) as uint;
+        let origin = try!(self.r.read_le_u32()) as usize;
         self.output.truncate(0);
         self.output.reserve(n);
 
@@ -395,7 +395,7 @@ impl<R: Reader> Decoder<R> {
 }
 
 impl<R: Reader> Reader for Decoder<R> {
-    fn read(&mut self, dst: &mut [u8]) -> io::IoResult<uint> {
+    fn read(&mut self, dst: &mut [u8]) -> io::IoResult<usize> {
         if !self.header {
             try!(self.read_header());
             self.header = true;
@@ -433,9 +433,9 @@ impl<R: Reader> Reader for Decoder<R> {
 pub struct Encoder<W> {
     w: W,
     buf: Vec<u8>,
-    suf: Vec<uint>,
+    suf: Vec<usize>,
     wrote_header: bool,
-    block_size: uint,
+    block_size: usize,
 }
 
 impl<W: Writer> Encoder<W> {
@@ -444,7 +444,7 @@ impl<W: Writer> Encoder<W> {
     /// `finish()`
     /// 'block_size' is idealy as big as your input, unless you know for sure that
     /// the input consists of multiple parts of different nature. Often set as 4Mb.
-    pub fn new(w: W, block_size: uint) -> Encoder<W> {
+    pub fn new(w: W, block_size: usize) -> Encoder<W> {
         Encoder {
             w: w,
             buf: Vec::new(),

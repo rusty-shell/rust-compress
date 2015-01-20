@@ -44,13 +44,13 @@ pub mod table;
 mod test;
 
 pub type Symbol = u8;
-const SYMBOL_BITS: uint = 8;
-const SYMBOL_TOTAL: uint = 1<<SYMBOL_BITS;
+const SYMBOL_BITS: usize = 8;
+const SYMBOL_TOTAL: usize = 1<<SYMBOL_BITS;
 
 pub type Border = u32;
-const BORDER_BYTES: uint = 4;
-const BORDER_BITS: uint = BORDER_BYTES * 8;
-const BORDER_EXCESS: uint = BORDER_BITS-SYMBOL_BITS;
+const BORDER_BYTES: usize = 4;
+const BORDER_BITS: usize = BORDER_BYTES * 8;
+const BORDER_EXCESS: usize = BORDER_BITS-SYMBOL_BITS;
 const BORDER_SYMBOL_MASK: u32 = ((SYMBOL_TOTAL-1) << BORDER_EXCESS) as u32;
 
 pub const RANGE_DEFAULT_THRESHOLD: Border = 1<<14;
@@ -109,7 +109,7 @@ impl RangeEncoder {
 
     /// Process a given interval [from/total,to/total) into the current range
     /// write into the output slice, and return the number of symbols produced
-    pub fn process(&mut self, total: Border, from: Border, to: Border, output: &mut [Symbol]) -> uint {
+    pub fn process(&mut self, total: Border, from: Border, to: Border, output: &mut [Symbol]) -> usize {
         debug_assert!(from<to && to<=total);
         let old_range = self.hai - self.low;
         let range = old_range / total;
@@ -119,7 +119,7 @@ impl RangeEncoder {
         let mut lo = self.low + range*from;
         let mut hi = self.low + range*to;
         self.bits_lost_on_division += RangeEncoder::count_bits(range*total, old_range);
-        let mut num_shift = 0u;
+        let mut num_shift = 0;
         loop {
             if (lo^hi) & BORDER_SYMBOL_MASK != 0 {
                 if hi-lo > self.threshold {
@@ -176,7 +176,7 @@ pub trait Model<V: Copy + Show> {
 
     /// Encode a value using a range encoder
     /// return the number of symbols written
-    fn encode(&self, value: V, re: &mut RangeEncoder, out: &mut [Symbol]) -> uint {
+    fn encode(&self, value: V, re: &mut RangeEncoder, out: &mut [Symbol]) -> usize {
         let (lo, hi) = self.get_range(value);
         let total = self.get_denominator();
         debug!("\tEncoding value {:?} of range [{}-{}) with total {}", value, lo, hi, total);
@@ -185,7 +185,7 @@ pub trait Model<V: Copy + Show> {
 
     /// Decode a value using given 'code' on the range encoder
     /// return a (value, num_symbols_to_shift) pair
-    fn decode(&self, code: Border, re: &mut RangeEncoder) -> (V, uint) {
+    fn decode(&self, code: Border, re: &mut RangeEncoder) -> (V, usize) {
         let total = self.get_denominator();
         let offset = re.query(total, code);
         let (value, lo, hi) = self.find_value(offset);
@@ -248,7 +248,7 @@ pub struct Decoder<R> {
     stream: R,
     range: RangeEncoder,
     code: Border,
-    bytes_pending: uint,
+    bytes_pending: usize,
 }
 
 impl<R: Reader> Decoder<R> {

@@ -61,13 +61,13 @@ impl Model {
     /// Update the frequency of zero
     pub fn update_zero(&mut self) {
         debug!("\tUpdating zero");
-        self.zero += (self.total-self.zero) >> (self.rate as uint);
+        self.zero += (self.total-self.zero) >> (self.rate as usize);
     }
 
     /// Update the frequency of one
     pub fn update_one(&mut self) {
         debug!("\tUpdating one");
-        self.zero -= self.zero >> (self.rate as uint);
+        self.zero -= self.zero >> (self.rate as usize);
     }
 
     /// Update frequencies in favor of given 'value'
@@ -132,7 +132,7 @@ impl<'a> SumProxy<'a> {
     fn get_probability_zero(&self) -> Border {
         (self.w_first * self.first.get_probability_zero() +
             self.w_second * self.second.get_probability_zero()) >>
-            (self.w_shift as uint)
+            (self.w_shift as usize)
     }
 }
 
@@ -162,6 +162,6 @@ impl<'a> super::Model<bool> for SumProxy<'a> {
     fn get_denominator(&self) -> Border {
         (self.w_first * self.first.get_denominator() +
             self.w_second * self.second.get_denominator()) >>
-            (self.w_shift as uint)
+            (self.w_shift as usize)
     }
 }

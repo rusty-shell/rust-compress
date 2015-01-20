@@ -96,7 +96,7 @@ impl<R: Reader> Decoder<R> {
 }
 
 impl<R: Reader> Reader for Decoder<R> {
-    fn read(&mut self, buf: &mut [u8]) -> io::IoResult<uint> {
+    fn read(&mut self, buf: &mut [u8]) -> io::IoResult<usize> {
         if !self.read_header {
             try!(self.validate_header());
             self.read_header = true;
@@ -186,7 +186,7 @@ mod test {
         let mut out = Vec::new();
         let mut buf = [0u8; 40];
         loop {
-            match d.read(buf.slice_to_mut(1 + rand::random::<uint>() % 40)) {
+            match d.read(buf.slice_to_mut(1 + rand::random::<usize>() % 40)) {
                 Ok(n) => {
                     out.push_all(buf.slice_to(n));
                 }
