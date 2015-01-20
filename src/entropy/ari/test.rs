@@ -13,7 +13,7 @@ fn roundtrip(bytes: &[u8]) {
     let (e, r) = e.finish();
     r.unwrap();
     let encoded = e.into_inner();
-    debug!("Roundtrip input {} encoded {}", bytes, encoded);
+    debug!("Roundtrip input {:?} encoded {:?}", bytes, encoded);
     let mut d = super::ByteDecoder::new(BufReader::new(encoded.as_slice()));
     let decoded = d.read_to_end().unwrap();
     assert_eq!(bytes.as_slice(), decoded.as_slice());
@@ -22,7 +22,7 @@ fn roundtrip(bytes: &[u8]) {
 fn encode_binary(bytes: &[u8], model: &mut super::bin::Model) -> Vec<u8> {
     let mut encoder = super::Encoder::new(MemWriter::new());
     for &byte in bytes.iter() {
-        for i in range(0u,8) {
+        for i in range(0,8) {
             let bit = (byte & (1<<i)) != 0;
             encoder.encode(bit, model).unwrap();
             model.update(bit);
@@ -40,7 +40,7 @@ fn roundtrip_binary(bytes: &[u8], factor: u32) {
     let mut decoder = super::Decoder::new(BufReader::new(output.as_slice()));
     for &byte in bytes.iter() {
         let mut value = 0u8;
-        for i in range(0u,8) {
+        for i in range(0,8) {
             let bit = decoder.decode(&bm).unwrap();
             bm.update(bit);
             value += (bit as u8)<<i;
@@ -66,7 +66,7 @@ fn roundtrip_term(bytes1: &[u8], bytes2: &[u8]) {
         stream
     };
     let encoded = mw.into_inner();
-    debug!("Roundtrip term input {}:{} encoded {}", bytes1, bytes2, encoded);
+    debug!("Roundtrip term input {:?}:{:?} encoded {:?}", bytes1, bytes2, encoded);
     let br = BufReader::new(encoded.as_slice());
     let br = {
         let mut d = super::ByteDecoder::new(br);
@@ -98,14 +98,14 @@ fn roundtrip_proxy(bytes: &[u8]) {
     // encode (high 4 bits with the proxy table, low 4 bits with the proxy binary)
     let mut encoder = super::Encoder::new(MemWriter::new());
     for &byte in bytes.iter() {
-        let high = (byte>>4) as uint;
+        let high = (byte>>4) as usize;
         {
             let proxy = super::table::SumProxy::new(2, &t0, 1, &t1, 0);
             encoder.encode(high, &proxy).unwrap();
         }
         t0.update(high, update0, 1);
         t1.update(high, update1, 1);
-        for i in range(0u,4) {
+        for i in range(0,4) {
             let bit = (byte & (1<<i)) != 0;
             {
                 let proxy = super::bin::SumProxy::new(1, &b0, 1, &b1, 1);
@@ -132,7 +132,7 @@ fn roundtrip_proxy(bytes: &[u8]) {
         t0.update(high, update0, 1);
         t1.update(high, update1, 1);
         let mut value = (high<<4) as u8;
-        for i in range(0u,4) {
+        for i in range(0,4) {
             let bit = {
                 let proxy = super::bin::SumProxy::new(1, &b0, 1, &b1, 1);
                 decoder.decode(&proxy).unwrap()
@@ -150,7 +150,7 @@ fn roundtrip_apm(bytes: &[u8]) {
     let mut gate = super::apm::Gate::new();
     let mut encoder = super::Encoder::new(MemWriter::new());
     for b8 in bytes.iter() {
-        for i in range(0u,8) {
+        for i in range(0,8) {
             let b1 = (*b8>>i) & 1 != 0;
             let (bit_new, coords) = gate.pass(&bit);
             encoder.encode(b1, &bit_new).unwrap();
@@ -166,7 +166,7 @@ fn roundtrip_apm(bytes: &[u8]) {
     let mut decoder = super::Decoder::new(BufReader::new(output.as_slice()));
     for b8 in bytes.iter() {
         let mut decoded = 0u8;
-        for i in range(0u,8) {
+        for i in range(0,8) {
             let (bit_new, coords) = gate.pass(&bit);
             let b1 = decoder.decode(&bit_new).unwrap();
             if b1 {

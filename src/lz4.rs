@@ -32,13 +32,13 @@ use std::vec::Vec;
 const MAGIC: u32 = 0x184d2204;
 
 const ML_BITS: u32 = 4;
-const ML_MASK: u32 = (1 << ML_BITS as uint) - 1;
+const ML_MASK: u32 = (1 << ML_BITS as usize) - 1;
 const RUN_BITS: u32 = 8 - ML_BITS;
-const RUN_MASK: u32 = (1 << RUN_BITS as uint) - 1;
+const RUN_MASK: u32 = (1 << RUN_BITS as usize) - 1;
 
 const MIN_MATCH: u32 = 4;
 const HASH_LOG: u32 = 17;
-const HASH_TABLE_SIZE: u32 = 1 << (HASH_LOG as uint);
+const HASH_TABLE_SIZE: u32 = 1 << (HASH_LOG as usize);
 const HASH_SHIFT: u32 = (MIN_MATCH * 8) - HASH_LOG;
 const INCOMPRESSIBLE: u32 = 128;
 const UNINITHASH: u32 = 0x88888888;
@@ -47,16 +47,16 @@ const MAX_INPUT_SIZE: u32 = 0x7e000000;
 struct BlockDecoder<'a> {
     input: &'a [u8],
     output: &'a mut Vec<u8>,
-    cur: uint,
+    cur: usize,
 
-    start: uint,
-    end: uint,
+    start: usize,
+    end: usize,
 }
 
 impl<'a> BlockDecoder<'a> {
     /// Decodes this block of data from 'input' to 'output', returning the
     /// number of valid bytes in the output.
-    fn decode(&mut self) -> uint {
+    fn decode(&mut self) -> usize {
         while self.cur < self.input.len() {
             let code = self.bump();
             debug!("block with code: {:x}", code);
@@ -75,7 +75,7 @@ impl<'a> BlockDecoder<'a> {
 
             // Read off the next i16 offset
             {
-                let back = (self.bump() as uint) | ((self.bump() as uint) << 8);
+                let back = (self.bump() as usize) | ((self.bump() as usize) << 8);
                 debug!("found back {}", back);
                 self.start = self.end - back;
             }
@@ -85,7 +85,7 @@ impl<'a> BlockDecoder<'a> {
                 let mut len = self.length(code & 0xf);
                 let literal = self.end - self.start;
                 if literal < 4 {
-                    static DECR: [uint; 4] = [0, 3, 2, 3];
+                    static DECR: [usize; 4] = [0, 3, 2, 3];
                     self.cp(4, DECR[literal]);
                 } else {
                     len += 4;
@@ -96,12 +96,12 @@ impl<'a> BlockDecoder<'a> {
         return self.end;
     }
 
-    fn length(&mut self, code: u8) -> uint {
-        let mut ret = code as uint;
+    fn length(&mut self, code: u8) -> usize {
+        let mut ret = code as usize;
         if code == 0xf {
             loop {
                 let tmp = self.bump();
-                ret += tmp as uint;
+                ret += tmp as usize;
                 if tmp != 0xff { break }
             }
         }
@@ -115,7 +115,7 @@ impl<'a> BlockDecoder<'a> {
     }
 
     #[inline]
-    fn cp(&mut self, len: uint, decr: uint) {
+    fn cp(&mut self, len: usize, decr: usize) {
         let end = self.end;
         self.grow_output(end + len);
         for i in range(0, len) {
@@ -132,7 +132,7 @@ impl<'a> BlockDecoder<'a> {
     // the next operation is to pave over these bytes (so the initialization is
     // unnecessary).
     #[inline]
-    fn grow_output(&mut self, target: uint) {
+    fn grow_output(&mut self, target: usize) {
         if self.output.capacity() < target {
             debug!("growing {} to {}", self.output.capacity(), target);
             self.output.reserve(target);
@@ -165,10 +165,10 @@ pub fn compression_bound(size: u32) -> Option<u32> {
 impl<'a> BlockEncoder<'a> {
     #[inline(always)]
     fn seq_at(&self, pos: u32) -> u32 {
-        (self.input[pos as uint + 3] as u32) << 24
-            | (self.input[pos as uint + 2] as u32) << 16
-            | (self.input[pos as uint + 1] as u32) << 8
-            | (self.input[pos as uint] as u32)
+        (self.input[pos as usize + 3] as u32) << 24
+            | (self.input[pos as usize + 2] as u32) << 16
+            | (self.input[pos as usize + 1] as u32) << 8
+            | (self.input[pos as usize] as u32)
     }
 
     fn write_literals(&mut self, len: u32, ml_len: u32, pos: u32) {
@@ -177,9 +177,9 @@ impl<'a> BlockEncoder<'a> {
         let code = if ln > RUN_MASK - 1 { RUN_MASK as u8 } else { ln as u8 };
 
         if ml_len > ML_MASK - 1 {
-            self.output[self.dest_pos as uint] = (code << ML_BITS as uint) + ML_MASK as u8;
+            self.output[self.dest_pos as usize] = (code << ML_BITS as usize) + ML_MASK as u8;
         } else {
-            self.output[self.dest_pos as uint] = (code << ML_BITS as uint) + ml_len as u8;
+            self.output[self.dest_pos as usize] = (code << ML_BITS as usize) + ml_len as u8;
         }
 
         self.dest_pos += 1;
@@ -187,19 +187,19 @@ impl<'a> BlockEncoder<'a> {
         if code == RUN_MASK as u8 {
             ln -= RUN_MASK;
             while ln > 254 {
-                self.output[self.dest_pos as uint] = 255;
+                self.output[self.dest_pos as usize] = 255;
                 self.dest_pos += 1;
                 ln -= 255;
             }
 
-            self.output[self.dest_pos as uint] = ln as u8;
+            self.output[self.dest_pos as usize] = ln as u8;
             self.dest_pos += 1;
         }
 
         // FIXME: find out why slicing syntax fails tests
-        //self.output[self.dest_pos as uint .. (self.dest_pos + len) as uint] = self.input[pos as uint.. (pos + len) as uint];
-        for i in range(0, len as uint) {
-            self.output[self.dest_pos as uint + i] = self.input[pos as uint + i];
+        //self.output[self.dest_pos as usize .. (self.dest_pos + len) as usize] = self.input[pos as uint.. (pos + len) as uint];
+        for i in range(0, len as usize) {
+            self.output[self.dest_pos as usize + i] = self.input[pos as usize + i];
         }
 
         self.dest_pos += len;
@@ -211,9 +211,9 @@ impl<'a> BlockEncoder<'a> {
         match compression_bound(input_len) {
             None => 0,
             Some(out_size) => {
-                let additional = out_size as uint - self.output.capacity();
+                let additional = out_size as usize - self.output.capacity();
                 self.output.reserve(additional);
-                unsafe {self.output.set_len(out_size as uint); }
+                unsafe {self.output.set_len(out_size as usize); }
 
                 let mut step = 1u32;
                 let mut limit = INCOMPRESSIBLE;
@@ -222,15 +222,15 @@ impl<'a> BlockEncoder<'a> {
                     if self.pos + 12 > input_len {
                         let tmp = self.anchor;
                         self.write_literals(self.input.len() as u32 - tmp, 0, tmp);
-                        unsafe { self.output.set_len(self.dest_pos as uint) };
+                        unsafe { self.output.set_len(self.dest_pos as usize) };
                         return self.dest_pos;
                     }
 
                     let seq = self.seq_at(self.pos);
 
-                    let hash = (seq * 2654435761) >> (HASH_SHIFT as uint);
-                    let mut r = self.hash_table[hash as uint] + UNINITHASH;
-                    self.hash_table[hash as uint] = self.pos - UNINITHASH;
+                    let hash = (seq * 2654435761) >> (HASH_SHIFT as usize);
+                    let mut r = self.hash_table[hash as usize] + UNINITHASH;
+                    self.hash_table[hash as usize] = self.pos - UNINITHASH;
 
                     if ((self.pos - r) >> 16) != 0 || seq != self.seq_at(r) {
                         if self.pos - self.anchor > limit {
@@ -242,7 +242,7 @@ impl<'a> BlockEncoder<'a> {
                     }
 
                     if step > 1 {
-                        self.hash_table[hash as uint] = r - UNINITHASH;
+                        self.hash_table[hash as usize] = r - UNINITHASH;
                         self.pos -= step - 1;
                         step = 1;
                         continue;
@@ -258,7 +258,7 @@ impl<'a> BlockEncoder<'a> {
                     r += MIN_MATCH;
                     self.anchor = self.pos;
 
-                    while (self.pos < input_len - 5) && self.input[self.pos as uint] == self.input[r as uint] {
+                    while (self.pos < input_len - 5) && self.input[self.pos as usize] == self.input[r as usize] {
                         self.pos += 1;
                         r += 1
                     }
@@ -266,8 +266,8 @@ impl<'a> BlockEncoder<'a> {
                     let mut ml_len = self.pos - self.anchor;
 
                     self.write_literals(ln, ml_len, anchor);
-                    self.output[self.dest_pos as uint] = back as u8;
-                    self.output[self.dest_pos as uint + 1] = (back >> 8) as u8;
+                    self.output[self.dest_pos as usize] = back as u8;
+                    self.output[self.dest_pos as usize + 1] = (back >> 8) as u8;
                     self.dest_pos += 2;
 
                     if ml_len > ML_MASK - 1 {
@@ -275,11 +275,11 @@ impl<'a> BlockEncoder<'a> {
                         while ml_len > 254 {
                             ml_len -= 255;
 
-                            self.output[self.dest_pos as uint] = 255;
+                            self.output[self.dest_pos as usize] = 255;
                             self.dest_pos += 1;
                         }
 
-                        self.output[self.dest_pos as uint] = ml_len as u8;
+                        self.output[self.dest_pos as usize] = ml_len as u8;
                         self.dest_pos += 1;
                     }
 
@@ -302,14 +302,14 @@ pub struct Decoder<R> {
     temp: Vec<u8>,
     output: Vec<u8>,
 
-    start: uint,
-    end: uint,
+    start: usize,
+    end: usize,
     eof: bool,
 
     header: bool,
     blk_checksum: bool,
     stream_checksum: bool,
-    max_block_size: uint,
+    max_block_size: usize,
 }
 
 impl<R: Reader> Decoder<R> {
@@ -366,7 +366,7 @@ impl<R: Reader> Decoder<R> {
         // bit 0 is whether there is a preset dictionary
         let preset_dictionary = (flg & 0x01) != 0;
 
-        static MAX_SIZES: [uint; 8] =
+        static MAX_SIZES: [usize; 8] =
             [0, 0, 0, 0, // all N/A
              64 << 10,   // 64KB
              256 << 10,  // 256 KB
@@ -375,7 +375,7 @@ impl<R: Reader> Decoder<R> {
 
         // bit 7 is reserved
         // bits 6-4 are the maximum block size
-        let max_block_size = MAX_SIZES[(bd >> 4) as uint & 0x7];
+        let max_block_size = MAX_SIZES[(bd >> 4) as usize & 0x7];
         // bits 3-0 are reserved
 
         // read off other portions of the stream
@@ -406,7 +406,7 @@ impl<R: Reader> Decoder<R> {
 
             // raw block to read
             n if n & 0x80000000 != 0 => {
-                let amt = (n & 0x7fffffff) as uint;
+                let amt = (n & 0x7fffffff) as usize;
                 self.output.truncate(0);
                 self.output.reserve(amt);
                 try!(self.r.push_at_least(amt, amt, &mut self.output));
@@ -416,7 +416,7 @@ impl<R: Reader> Decoder<R> {
 
             // actual block to decompress
             n => {
-                let n = n as uint;
+                let n = n as usize;
                 self.temp.truncate(0);
                 self.temp.reserve(n);
                 try!(self.r.push_at_least(n, n, &mut self.temp));
@@ -448,7 +448,7 @@ impl<R: Reader> Decoder<R> {
 }
 
 impl<R: Reader> Reader for Decoder<R> {
-    fn read(&mut self, dst: &mut [u8]) -> io::IoResult<uint> {
+    fn read(&mut self, dst: &mut [u8]) -> io::IoResult<usize> {
         if self.eof { return Err(io::standard_error(io::EndOfFile)) }
         if !self.header {
             try!(self.read_header());
@@ -484,7 +484,7 @@ pub struct Encoder<W> {
     buf: Vec<u8>,
     tmp: Vec<u8>,
     wrote_header: bool,
-    limit: uint,
+    limit: usize,
 }
 
 impl<W: Writer> Encoder<W> {
@@ -570,7 +570,7 @@ impl<W: Writer> Writer for Encoder<W> {
 
 /// Decodes pure LZ4 block into output. Returns count of bytes
 /// processed.
-pub fn decode_block(input: &[u8], output: &mut Vec<u8>) -> uint {
+pub fn decode_block(input: &[u8], output: &mut Vec<u8>) -> usize {
     let mut b = BlockDecoder {
         input: input,
         output: output,
@@ -584,17 +584,17 @@ pub fn decode_block(input: &[u8], output: &mut Vec<u8>) -> uint {
 
 /// Encodes input into pure LZ4 block. Return count of bytes
 /// processed.
-pub fn encode_block(input: &[u8], output: &mut Vec<u8>) -> uint {
+pub fn encode_block(input: &[u8], output: &mut Vec<u8>) -> usize {
     let mut encoder = BlockEncoder {
         input: input,
         output: output,
-        hash_table: repeat(0).take(HASH_TABLE_SIZE as uint).collect(),
+        hash_table: repeat(0).take(HASH_TABLE_SIZE as usize).collect(),
         pos: 0,
         anchor: 0,
         dest_pos: 0
     };
 
-    encoder.encode() as uint
+    encoder.encode() as usize
 }
 
 #[cfg(test)]
@@ -661,7 +661,7 @@ mod test {
         let mut out = Vec::new();
         let mut buf = [0u8; 40];
         loop {
-            match d.read(buf.slice_to_mut(1 + rand::random::<uint>() % 40)) {
+            match d.read(buf.slice_to_mut(1 + rand::random::<usize>() % 40)) {
                 Ok(n) => {
                     out.push_all(buf.slice_to(n));
                 }

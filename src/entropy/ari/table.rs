@@ -27,14 +27,14 @@ pub struct Model {
     /// should be smaller than RangeEncoder::threshold
     cut_threshold: Border,
     /// number of bits to shift on cut
-    cut_shift: uint,
+    cut_shift: usize,
 }
 
 impl Model {
     /// Create a new table with frequencies initialized by a function
-    pub fn new_custom<F>(num_values: uint, threshold: Border,
+    pub fn new_custom<F>(num_values: usize, threshold: Border,
                          mut fn_init: F) -> Model
-        where F: FnMut(uint) -> Frequency
+        where F: FnMut(usize) -> Frequency
     {
         let freq: Vec<Frequency> = range(0, num_values).map(|i| fn_init(i)).collect();
         let total = freq.iter().fold(0 as Border, |u,&f| u+(f as Border));
@@ -52,7 +52,7 @@ impl Model {
     }
 
     /// Create a new tanle with all frequencies being equal
-    pub fn new_flat(num_values: uint, threshold: Border) -> Model {
+    pub fn new_flat(num_values: usize, threshold: Border) -> Model {
         Model::new_custom(num_values, threshold, |_| 1)
     }
 
@@ -67,7 +67,7 @@ impl Model {
     /// Adapt the table in favor of given 'value'
     /// using 'add_log' and 'add_const' to produce the additive factor
     /// the higher 'add_log' is, the more concervative is the adaptation
-    pub fn update(&mut self, value: uint, add_log: uint, add_const: Border) {
+    pub fn update(&mut self, value: usize, add_log: usize, add_const: Border) {
         let add = (self.total>>add_log) + add_const;
         assert!(add < 2*self.cut_threshold);
         debug!("\tUpdating by adding {} to value {}", add, value);
@@ -97,17 +97,17 @@ impl Model {
     }
 }
 
-impl super::Model<uint> for Model {
-    fn get_range(&self, value: uint) -> (Border,Border) {
+impl super::Model<usize> for Model {
+    fn get_range(&self, value: usize) -> (Border,Border) {
         let lo = self.table.slice_to(value).iter().fold(0, |u,&f| u+(f as Border));
         (lo, lo + (self.table[value] as Border))
     }
 
-    fn find_value(&self, offset: Border) -> (uint,Border,Border) {
+    fn find_value(&self, offset: Border) -> (usize,Border,Border) {
         assert!(offset < self.total,
             "Invalid frequency offset {} requested under total {}",
             offset, self.total);
-        let mut value = 0u;
+        let mut value = 0;
         let mut lo = 0 as Border;
         let mut hi;
         while {hi=lo+(self.table[value] as Border); hi} <= offset {
@@ -147,25 +147,25 @@ impl<'a> SumProxy<'a> {
     }
 }
 
-impl<'a> super::Model<uint> for SumProxy<'a> {
-    fn get_range(&self, value: uint) -> (Border,Border) {
+impl<'a> super::Model<usize> for SumProxy<'a> {
+    fn get_range(&self, value: usize) -> (Border,Border) {
         let (lo0, hi0) = self.first.get_range(value);
         let (lo1, hi1) = self.second.get_range(value);
-        let (wa, wb, ws) = (self.w_first, self.w_second, self.w_shift as uint);
+        let (wa, wb, ws) = (self.w_first, self.w_second, self.w_shift as usize);
         ((wa*lo0 + wb*lo1)>>ws, (wa*hi0 + wb*hi1)>>ws)
     }
 
-    fn find_value(&self, offset: Border) -> (uint,Border,Border) {
+    fn find_value(&self, offset: Border) -> (usize,Border,Border) {
         assert!(offset < self.get_denominator(),
             "Invalid frequency offset {} requested under total {}",
             offset, self.get_denominator());
-        let mut value = 0u;
+        let mut value = 0;
         let mut lo = 0 as Border;
         let mut hi;
         while {  hi = lo +
                 (self.w_first * (self.first.get_frequencies()[value] as Border) +
                 self.w_second * (self.second.get_frequencies()[value] as Border)) >>
-                (self.w_shift as uint);
+                (self.w_shift as usize);
                 hi <= offset } {
             lo = hi;
             value += 1;
@@ -176,7 +176,7 @@ impl<'a> super::Model<uint> for SumProxy<'a> {
     fn get_denominator(&self) -> Border {
         (self.w_first * self.first.get_denominator() +
             self.w_second * self.second.get_denominator()) >>
-            (self.w_shift as uint)
+            (self.w_shift as usize)
     }
 }
 
@@ -211,7 +211,7 @@ impl<W: Writer> ByteEncoder<W> {
 impl<W: Writer> Writer for ByteEncoder<W> {
     fn write(&mut self, buf: &[u8]) -> io::IoResult<()> {
         buf.iter().fold(Ok(()), |result,byte| {
-            let value = *byte as uint;
+            let value = *byte as usize;
             let ret = self.encoder.encode(value, &self.freq);
             self.freq.update(value, 10, 1);
             result.and(ret)
@@ -253,11 +253,11 @@ impl<R: Reader> ByteDecoder<R> {
 }
 
 impl<R: Reader> Reader for ByteDecoder<R> {
-    fn read(&mut self, dst: &mut [u8]) -> io::IoResult<uint> {
+    fn read(&mut self, dst: &mut [u8]) -> io::IoResult<usize> {
         if self.is_eof {
             return Err(io::standard_error(io::EndOfFile))
         }
-        let mut amount = 0u;
+        let mut amount = 0;
         for out_byte in dst.iter_mut() {
             let value = try!(self.decoder.decode(&self.freq));
             if value == super::SYMBOL_TOTAL {
