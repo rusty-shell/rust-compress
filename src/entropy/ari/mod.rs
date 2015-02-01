@@ -11,7 +11,7 @@ http://en.wikipedia.org/wiki/Range_encoding
 # Example
 ```rust
 # #[allow(unused_must_use)];
-use std::io::{MemWriter, MemReader};
+use std::old_io::{MemWriter, MemReader};
 use compress::entropy::ari;
 
 // Encode some text
@@ -32,8 +32,8 @@ This is an original implementation.
 
 #![allow(missing_docs)]
 
-use std::fmt::Show;
-use std::io::IoResult;
+use std::fmt::{Debug, Display};
+use std::old_io::IoResult;
 
 pub use self::table::{ByteDecoder, ByteEncoder};
 
@@ -166,7 +166,7 @@ impl RangeEncoder {
 
 /// An abstract model to produce probability ranges
 /// Can be a table, a mix of tables, or just a smart function.
-pub trait Model<V: Copy + Show> {
+pub trait Model<V: Copy + Display> {
     /// Get the probability range of a value
     fn get_range(&self, value: V) -> (Border,Border);
     /// Find the value by a given probability offset, return with the range
@@ -179,7 +179,7 @@ pub trait Model<V: Copy + Show> {
     fn encode(&self, value: V, re: &mut RangeEncoder, out: &mut [Symbol]) -> usize {
         let (lo, hi) = self.get_range(value);
         let total = self.get_denominator();
-        debug!("\tEncoding value {:?} of range [{}-{}) with total {}", value, lo, hi, total);
+        debug!("\tEncoding value {} of range [{}-{}) with total {}", value, lo, hi, total);
         re.process(total, lo, hi, out)
     }
 
@@ -189,7 +189,7 @@ pub trait Model<V: Copy + Show> {
         let total = self.get_denominator();
         let offset = re.query(total, code);
         let (value, lo, hi) = self.find_value(offset);
-        debug!("\tDecoding value {:?} of offset {} with total {}", value, offset, total);
+        debug!("\tDecoding value {} of offset {} with total {}", value, offset, total);
         let mut out = [0 as Symbol; BORDER_BYTES];
         let shift = re.process(total, lo, hi, out.as_mut_slice());
         debug_assert_eq!(if shift==0 {0} else {code>>(BORDER_BITS - shift*8)},
@@ -215,7 +215,7 @@ impl<W: Writer> Encoder<W> {
     }
 
     /// Encode an abstract value under the given Model
-    pub fn encode<V: Copy + Show, M: Model<V>>(&mut self, value: V, model: &M) -> IoResult<()> {
+    pub fn encode<V: Copy + Display, M: Model<V>>(&mut self, value: V, model: &M) -> IoResult<()> {
         let mut buf = [0 as Symbol; BORDER_BYTES];
         let num = model.encode(value, &mut self.range, buf.as_mut_slice());
         self.stream.write(buf.slice_to(num))
@@ -272,7 +272,7 @@ impl<R: Reader> Decoder<R> {
     }
 
     /// Decode an abstract value based on the given Model
-    pub fn decode<V: Copy + Show, M: Model<V>>(&mut self, model: &M) -> IoResult<V> {
+    pub fn decode<V: Copy + Display, M: Model<V>>(&mut self, model: &M) -> IoResult<V> {
         self.feed().unwrap();
         let (value, shift) = model.decode(self.code, &mut self.range);
         self.bytes_pending = shift;

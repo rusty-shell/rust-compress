@@ -1,4 +1,4 @@
-use std::io::{BufReader, BufWriter, MemWriter, SeekSet};
+use std::old_io::{BufReader, BufWriter, MemWriter, SeekSet};
 use std::iter::repeat;
 use std::vec::Vec;
 use test::Bencher;

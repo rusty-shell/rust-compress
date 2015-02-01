@@ -7,7 +7,7 @@
 //!
 //! ```rust
 //! use compress::zlib;
-//! use std::io::File;
+//! use std::old_io::File;
 //!
 //! let stream = File::open(&Path::new("path/to/file.flate"));
 //! let decompressed = zlib::Decoder::new(stream).read_to_end();
@@ -18,7 +18,7 @@
 //! * http://tools.ietf.org/html/rfc1950 - RFC that this implementation is based
 //!   on
 
-use std::io;
+use std::old_io;
 
 use Adler32;
 use flate;
@@ -48,35 +48,35 @@ impl<R: Reader> Decoder<R> {
         self.inner.r
     }
 
-    fn validate_header(&mut self) -> io::IoResult<()> {
+    fn validate_header(&mut self) -> old_io::IoResult<()> {
         let cmf = try!(self.inner.r.read_byte());
         let flg = try!(self.inner.r.read_byte());
         if cmf & 0xf != 0x8 {
-            return Err(io::IoError {
-                kind: io::InvalidInput,
+            return Err(old_io::IoError {
+                kind: old_io::InvalidInput,
                 desc: "unsupport zlib stream format",
                 detail: None,
             })
         }
         if cmf & 0xf0 != 0x70 {
-            return Err(io::IoError {
-                kind: io::InvalidInput,
+            return Err(old_io::IoError {
+                kind: old_io::InvalidInput,
                 desc: "unsupport zlib window size",
                 detail: None,
             })
         }
 
         if flg & 0x20 != 0 {
-            return Err(io::IoError {
-                kind: io::InvalidInput,
+            return Err(old_io::IoError {
+                kind: old_io::InvalidInput,
                 desc: "unsupported initial dictionary in the output stream",
                 detail: None,
             })
         }
 
         if ((cmf as u16) * 256 + (flg as u16)) % 31 != 0 {
-            return Err(io::IoError {
-                kind: io::InvalidInput,
+            return Err(old_io::IoError {
+                kind: old_io::InvalidInput,
                 desc: "invalid zlib header checksum",
                 detail: None,
             })
@@ -96,23 +96,23 @@ impl<R: Reader> Decoder<R> {
 }
 
 impl<R: Reader> Reader for Decoder<R> {
-    fn read(&mut self, buf: &mut [u8]) -> io::IoResult<usize> {
+    fn read(&mut self, buf: &mut [u8]) -> old_io::IoResult<usize> {
         if !self.read_header {
             try!(self.validate_header());
             self.read_header = true;
         } else if self.inner.eof() {
-            return Err(io::standard_error(io::EndOfFile));
+            return Err(old_io::standard_error(old_io::EndOfFile));
         }
         match self.inner.read(buf) {
             Ok(n) => {
                 self.hash.feed(buf.slice_to(n));
                 Ok(n)
             }
-            Err(ref e) if e.kind == io::EndOfFile => {
+            Err(ref e) if e.kind == old_io::EndOfFile => {
                 let cksum = try!(self.inner.r.read_be_u32());
                 if cksum != self.hash.result() {
-                    return Err(io::IoError {
-                        kind: io::InvalidInput,
+                    return Err(old_io::IoError {
+                        kind: old_io::InvalidInput,
                         desc: "invalid checksum on zlib stream",
                         detail: None,
                     })
@@ -127,7 +127,7 @@ impl<R: Reader> Reader for Decoder<R> {
 #[cfg(test)]
 #[allow(warnings)]
 mod test {
-    use std::io::{BufReader, MemWriter};
+    use std::old_io::{BufReader, MemWriter};
     use std::rand;
     use std::str;
     use super::{Decoder};

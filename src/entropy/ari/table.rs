@@ -11,7 +11,7 @@ The module also implements Reader/Writer using simple byte coding.
 
 */
 
-use std::io;
+use std::old_io;
 use super::Border;
 
 
@@ -201,7 +201,7 @@ impl<W: Writer> ByteEncoder<W> {
     }
 
     /// Finish encoding & write the terminator symbol
-    pub fn finish(mut self) -> (W, io::IoResult<()>) {
+    pub fn finish(mut self) -> (W, old_io::IoResult<()>) {
         let ret = self.encoder.encode(super::SYMBOL_TOTAL, &self.freq);
         let (w,r2) = self.encoder.finish();
         (w, ret.and(r2))
@@ -209,7 +209,7 @@ impl<W: Writer> ByteEncoder<W> {
 }
 
 impl<W: Writer> Writer for ByteEncoder<W> {
-    fn write(&mut self, buf: &[u8]) -> io::IoResult<()> {
+    fn write_all(&mut self, buf: &[u8]) -> old_io::IoResult<()> {
         buf.iter().fold(Ok(()), |result,byte| {
             let value = *byte as usize;
             let ret = self.encoder.encode(value, &self.freq);
@@ -218,7 +218,7 @@ impl<W: Writer> Writer for ByteEncoder<W> {
         })
     }
 
-    fn flush(&mut self) -> io::IoResult<()> {
+    fn flush(&mut self) -> old_io::IoResult<()> {
         self.encoder.flush()
     }
 }
@@ -247,15 +247,15 @@ impl<R: Reader> ByteDecoder<R> {
     }
 
     /// Finish decoding
-    pub fn finish(self) -> (R, io::IoResult<()>) {
+    pub fn finish(self) -> (R, old_io::IoResult<()>) {
         self.decoder.finish()
     }
 }
 
 impl<R: Reader> Reader for ByteDecoder<R> {
-    fn read(&mut self, dst: &mut [u8]) -> io::IoResult<usize> {
+    fn read(&mut self, dst: &mut [u8]) -> old_io::IoResult<usize> {
         if self.is_eof {
-            return Err(io::standard_error(io::EndOfFile))
+            return Err(old_io::standard_error(old_io::EndOfFile))
         }
         let mut amount = 0;
         for out_byte in dst.iter_mut() {

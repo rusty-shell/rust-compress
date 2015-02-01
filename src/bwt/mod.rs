@@ -25,7 +25,7 @@ EC (Entropy Coder): Huffman, Arithmetic, RC (Range Coder)
 
 ```rust
 # #[allow(unused_must_use)];
-use std::io::{MemWriter, MemReader};
+use std::old_io::{MemWriter, MemReader};
 use compress::bwt;
 
 // Encode some text
@@ -49,7 +49,7 @@ This is an original (mostly trivial) implementation.
 
 #![allow(missing_docs)]
 
-use std::{cmp, fmt, io, slice};
+use std::{cmp, fmt, old_io, slice};
 use std::iter::{self, Extend, repeat};
 use std::num::{NumCast, ToPrimitive};
 
@@ -126,7 +126,7 @@ impl Radix  {
 /// Compute a suffix array from a given input string
 /// Resulting suffixes are guaranteed to be alphabetically sorted
 /// Run time: O(N^3), memory: N words (suf_array) + ALPHABET_SIZE words (Radix)
-pub fn compute_suffixes<SUF: NumCast + ToPrimitive + fmt::Show>(input: &[Symbol], suf_array: &mut [SUF]) {
+pub fn compute_suffixes<SUF: NumCast + ToPrimitive + fmt::Debug>(input: &[Symbol], suf_array: &mut [SUF]) {
     let mut radix = Radix::new();
     radix.gather(input);
     radix.accumulate();
@@ -199,7 +199,7 @@ impl<'a, SUF: ToPrimitive + 'a> Iterator for TransformIterator<'a, SUF> {
 }
 
 /// Encode BWT of a given input, using the 'suf_array'
-pub fn encode<'a, SUF: NumCast + ToPrimitive + fmt::Show>(input: &'a [Symbol], suf_array: &'a mut [SUF]) -> TransformIterator<'a, SUF> {
+pub fn encode<'a, SUF: NumCast + ToPrimitive + fmt::Debug>(input: &'a [Symbol], suf_array: &'a mut [SUF]) -> TransformIterator<'a, SUF> {
     compute_suffixes(input, suf_array);
     TransformIterator::new(input, suf_array)
 }
@@ -215,7 +215,7 @@ pub fn encode_simple(input: &[Symbol]) -> (Vec<Symbol>, usize) {
 
 
 /// Compute an inversion jump table, needed for BWT decoding
-pub fn compute_inversion_table<SUF: NumCast + fmt::Show>(input: &[Symbol], origin: usize, table: &mut [SUF]) {
+pub fn compute_inversion_table<SUF: NumCast + fmt::Debug>(input: &[Symbol], origin: usize, table: &mut [SUF]) {
     assert_eq!(input.len(), table.len());
 
     let mut radix = Radix::new();
@@ -274,7 +274,7 @@ impl<'a, SUF: ToPrimitive> Iterator for InverseIterator<'a, SUF> {
 }
 
 /// Decode a BWT block, given it's origin, and using 'table' temporarily
-pub fn decode<'a, SUF: NumCast + fmt::Show>(input: &'a [Symbol], origin: usize, table: &'a mut [SUF]) -> InverseIterator<'a, SUF> {
+pub fn decode<'a, SUF: NumCast + fmt::Debug>(input: &'a [Symbol], origin: usize, table: &'a mut [SUF]) -> InverseIterator<'a, SUF> {
     compute_inversion_table(input, origin, table);
     InverseIterator::new(input, origin, table)
 }
@@ -351,7 +351,7 @@ impl<R: Reader> Decoder<R> {
         self.start = 0;
     }
 
-    fn read_header(&mut self) -> io::IoResult<()> {
+    fn read_header(&mut self) -> old_io::IoResult<()> {
         match self.r.read_le_u32() {
             Ok(size) => {
                 self.max_block_size = size as usize;
@@ -362,10 +362,10 @@ impl<R: Reader> Decoder<R> {
         }
     }
 
-    fn decode_block(&mut self) -> io::IoResult<bool> {
+    fn decode_block(&mut self) -> old_io::IoResult<bool> {
         let n = match self.r.read_le_u32() {
             Ok(n) => n as usize,
-            Err(ref e) if e.kind == io::EndOfFile => return Ok(false),
+            Err(ref e) if e.kind == old_io::EndOfFile => return Ok(false),
             Err(e) => return Err(e),
         };
         if n == 0 { return Ok(false) }
@@ -395,7 +395,7 @@ impl<R: Reader> Decoder<R> {
 }
 
 impl<R: Reader> Reader for Decoder<R> {
-    fn read(&mut self, dst: &mut [u8]) -> io::IoResult<usize> {
+    fn read(&mut self, dst: &mut [u8]) -> old_io::IoResult<usize> {
         if !self.header {
             try!(self.read_header());
             self.header = true;
@@ -420,7 +420,7 @@ impl<R: Reader> Reader for Decoder<R> {
         }
 
         if dst_len == amt {
-            Err(io::standard_error(io::EndOfFile))
+            Err(old_io::standard_error(old_io::EndOfFile))
         } else {
             Ok(dst_len - amt)
         }
@@ -454,7 +454,7 @@ impl<W: Writer> Encoder<W> {
         }
     }
 
-    fn encode_block(&mut self) -> io::IoResult<()> {
+    fn encode_block(&mut self) -> old_io::IoResult<()> {
         let n = self.buf.len();
         try!(self.w.write_le_u32(n as u32));
 
@@ -464,7 +464,7 @@ impl<W: Writer> Encoder<W> {
 
         {
             let mut iter = encode(self.buf.as_slice(), self.suf.as_mut_slice());
-            for ch in iter {
+            for ch in iter.by_ref() {
                 try!(w.write_u8(ch));
             }
 
@@ -478,14 +478,14 @@ impl<W: Writer> Encoder<W> {
     /// This function is used to flag that this session of compression is done
     /// with. The stream is finished up (final bytes are written), and then the
     /// wrapped writer is returned.
-    pub fn finish(mut self) -> (W, io::IoResult<()>) {
+    pub fn finish(mut self) -> (W, old_io::IoResult<()>) {
         let result = self.flush();
         (self.w, result)
     }
 }
 
 impl<W: Writer> Writer for Encoder<W> {
-    fn write(&mut self, mut buf: &[u8]) -> io::IoResult<()> {
+    fn write_all(&mut self, mut buf: &[u8]) -> old_io::IoResult<()> {
         if !self.wrote_header {
             try!(self.w.write_le_u32(self.block_size as u32));
             self.wrote_header = true;
@@ -503,7 +503,7 @@ impl<W: Writer> Writer for Encoder<W> {
         Ok(())
     }
 
-    fn flush(&mut self) -> io::IoResult<()> {
+    fn flush(&mut self) -> old_io::IoResult<()> {
         let ret = if self.buf.len() > 0 {
             self.encode_block()
         } else {
@@ -516,7 +516,7 @@ impl<W: Writer> Writer for Encoder<W> {
 
 #[cfg(test)]
 mod test {
-    use std::io::{BufReader, MemWriter};
+    use std::old_io::{BufReader, MemWriter};
     use std::iter::repeat;
     use test::Bencher;
     use super::{encode, decode, Decoder, Encoder};

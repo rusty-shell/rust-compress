@@ -10,7 +10,7 @@ interfaces wrapping an underlying stream.
 
 ```rust
 use compress::lz4;
-use std::io::File;
+use std::old_io::File;
 
 let stream = File::open(&Path::new("path/to/file.lz4"));
 let decompressed = lz4::Decoder::new(stream).read_to_end();
@@ -24,7 +24,7 @@ can be found at https://github.com/bkaradzic/go-lz4.
 */
 
 use std::cmp;
-use std::io;
+use std::old_io;
 use std::iter::repeat;
 use std::slice;
 use std::vec::Vec;
@@ -340,10 +340,10 @@ impl<R: Reader> Decoder<R> {
         self.end = 0;
     }
 
-    fn read_header(&mut self) -> io::IoResult<()> {
+    fn read_header(&mut self) -> old_io::IoResult<()> {
         // Make sure the magic number is what's expected.
         if try!(self.r.read_le_u32()) != MAGIC {
-            return Err(io::standard_error(io::InvalidInput))
+            return Err(old_io::standard_error(old_io::InvalidInput))
         }
 
         let mut bits = [0; 3];
@@ -353,7 +353,7 @@ impl<R: Reader> Decoder<R> {
 
         // bits 7/6, the version number. Right now this must be 1
         if (flg >> 6) != 0b01 {
-            return Err(io::standard_error(io::InvalidInput))
+            return Err(old_io::standard_error(old_io::InvalidInput))
         }
         // bit 5 is the "block independence", don't care about this yet
         // bit 4 is whether blocks have checksums or not
@@ -399,7 +399,7 @@ impl<R: Reader> Decoder<R> {
         return Ok(());
     }
 
-    fn decode_block(&mut self) -> io::IoResult<bool> {
+    fn decode_block(&mut self) -> old_io::IoResult<bool> {
         match try!(self.r.read_le_u32()) {
             // final block, we're done here
             0 => return Ok(false),
@@ -448,8 +448,8 @@ impl<R: Reader> Decoder<R> {
 }
 
 impl<R: Reader> Reader for Decoder<R> {
-    fn read(&mut self, dst: &mut [u8]) -> io::IoResult<usize> {
-        if self.eof { return Err(io::standard_error(io::EndOfFile)) }
+    fn read(&mut self, dst: &mut [u8]) -> old_io::IoResult<usize> {
+        if self.eof { return Err(old_io::standard_error(old_io::EndOfFile)) }
         if !self.header {
             try!(self.read_header());
             self.header = true;
@@ -504,7 +504,7 @@ impl<W: Writer> Encoder<W> {
         }
     }
 
-    fn encode_block(&mut self) -> io::IoResult<()> {
+    fn encode_block(&mut self) -> old_io::IoResult<()> {
         self.tmp.truncate(0);
         if self.compress() {
             try!(self.w.write_le_u32(self.tmp.len() as u32));
@@ -524,7 +524,7 @@ impl<W: Writer> Encoder<W> {
     /// This function is used to flag that this session of compression is done
     /// with. The stream is finished up (final bytes are written), and then the
     /// wrapped writer is returned.
-    pub fn finish(mut self) -> (W, io::IoResult<()>) {
+    pub fn finish(mut self) -> (W, old_io::IoResult<()>) {
         let result = self.flush();
         let result = result.and(self.w.write_le_u32(0));
         // XXX: this checksum is wrong
@@ -534,7 +534,7 @@ impl<W: Writer> Encoder<W> {
 }
 
 impl<W: Writer> Writer for Encoder<W> {
-    fn write(&mut self, mut buf: &[u8]) -> io::IoResult<()> {
+    fn write_all(&mut self, mut buf: &[u8]) -> old_io::IoResult<()> {
         if !self.wrote_header {
             try!(self.w.write_le_u32(MAGIC));
             // version 01, turn on block independence, but turn off
@@ -559,7 +559,7 @@ impl<W: Writer> Writer for Encoder<W> {
         Ok(())
     }
 
-    fn flush(&mut self) -> io::IoResult<()> {
+    fn flush(&mut self) -> old_io::IoResult<()> {
         if self.buf.len() > 0 {
             try!(self.encode_block());
         }
@@ -599,7 +599,7 @@ pub fn encode_block(input: &[u8], output: &mut Vec<u8>) -> usize {
 
 #[cfg(test)]
 mod test {
-    use std::io::{BufReader, MemWriter};
+    use std::old_io::{BufReader, MemWriter};
     use std::rand;
     use super::{Decoder, Encoder};
     use test;

@@ -24,7 +24,7 @@ Thanks to Edgar Binder for inventing DC!
 
 */
 
-use std::io;
+use std::old_io;
 use std::iter::{self, repeat};
 use std::slice as vec;
 use std::num::{NumCast, ToPrimitive};
@@ -36,7 +36,7 @@ pub const TOTAL_SYMBOLS: usize = 0x100;
 
 /// Distance coding context
 /// Has all the information potentially needed by the underlying coding model
-#[derive(PartialEq, Eq, Show)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct Context {
     /// current symbol
     pub symbol: Symbol,
@@ -160,8 +160,8 @@ pub fn encode_simple<D: Clone + Copy + Eq + NumCast>(input: &[Symbol]) -> Vec<D>
 
 /// Decode a block of distances given the initial symbol positions
 pub fn decode<F>(mut next: [usize; TOTAL_SYMBOLS], output: &mut [Symbol], mtf: &mut MTF,
-                 mut fn_dist: F) -> io::IoResult<()>
-    where F: FnMut(Context) -> io::IoResult<usize>
+                 mut fn_dist: F) -> old_io::IoResult<()>
+    where F: FnMut(Context) -> old_io::IoResult<usize>
 {
 
     let n = output.len();
@@ -243,7 +243,7 @@ pub fn decode_simple<D: ToPrimitive>(n: usize, distances: &[D]) -> Vec<Symbol> {
     decode(init, output.as_mut_slice(), &mut MTF::new(), |_ctx| {
         di += 1;
         if di > distances.len() {
-            Err(io::standard_error(io::EndOfFile))
+            Err(old_io::standard_error(old_io::EndOfFile))
         }else {
             Ok(distances[di-1].to_uint().unwrap())
         }

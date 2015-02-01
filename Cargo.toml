@@ -20,4 +20,4 @@ name = "compress"
 doc = false
 
 [dependencies]
-log = "0.1.6"
+log = "0.2.2"
