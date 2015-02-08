@@ -12,7 +12,7 @@
 extern crate compress;
 
 use std::collections::HashMap;
-use std::{io, os, str};
+use std::{old_io, os, str};
 use compress::{bwt, lz4};
 use compress::entropy::ari;
 
@@ -121,8 +121,8 @@ pub fn main() {
     });
 
     let config = Config::query(os::args().as_slice());
-    let mut input = io::stdin();
-    let mut output = io::stdout();
+    let mut input = old_io::stdin();
+    let mut output = old_io::stdout();
     if config.decompress {
         assert!(config.methods.is_empty(), "Decompression methods are set in stone");
         match input.read_le_u32() {
@@ -149,7 +149,7 @@ pub fn main() {
                 None => panic!("Pass is not implemented"),
             }
         }
-        io::util::copy(&mut rsum, &mut output).unwrap();
+        old_io::util::copy(&mut rsum, &mut output).unwrap();
     }else if config.methods.is_empty() {
         println!("rust-compress test application");
         println!("Usage:");
@@ -175,7 +175,7 @@ pub fn main() {
                 None => panic!("Pass {} is not implemented", *met)
             }
         }
-        io::util::copy(&mut input, &mut wsum).unwrap();
+        old_io::util::copy(&mut input, &mut wsum).unwrap();
         wsum.flush().unwrap();
     }
 }
