@@ -10,19 +10,21 @@ http://en.wikipedia.org/wiki/Range_encoding
 
 # Example
 ```rust
-# #[allow(unused_must_use)];
-use std::old_io::{MemWriter, MemReader};
+# #![allow(unused_must_use)]
+use std::io::{BufWriter, BufReader, Read, Write};
 use compress::entropy::ari;
 
 // Encode some text
 let text = "some text";
-let mut e = ari::ByteEncoder::new(MemWriter::new());
-e.write_str(text);
+let mut e = ari::ByteEncoder::new(BufWriter::new(Vec::new()));
+e.write_all(text.as_bytes()).unwrap();
 let (encoded, _) = e.finish();
+let inner = encoded.into_inner().unwrap();
 
 // Decode the encoded text
-let mut d = ari::ByteDecoder::new(MemReader::new(encoded.unwrap()));
-let decoded = d.read_to_end().unwrap();
+let mut d = ari::ByteDecoder::new(BufReader::new(&inner[..]));
+let mut decoded = Vec::new();
+d.read_to_end(&mut decoded).unwrap();
 ```
 # Credit
 
@@ -32,8 +34,11 @@ This is an original implementation.
 
 #![allow(missing_docs)]
 
-use std::fmt::{Debug, Display};
-use std::old_io::IoResult;
+use std::fmt::Display;
+use std::io::{self, Read, Write};
+
+use super::super::byteorder::{BigEndian, WriteBytesExt, ReadBytesExt};
+use super::super::byteorder_err_to_io;
 
 pub use self::table::{ByteDecoder, ByteEncoder};
 
@@ -191,9 +196,9 @@ pub trait Model<V: Copy + Display> {
         let (value, lo, hi) = self.find_value(offset);
         debug!("\tDecoding value {} of offset {} with total {}", value, offset, total);
         let mut out = [0 as Symbol; BORDER_BYTES];
-        let shift = re.process(total, lo, hi, out.as_mut_slice());
+        let shift = re.process(total, lo, hi, &mut out[..]);
         debug_assert_eq!(if shift==0 {0} else {code>>(BORDER_BITS - shift*8)},
-            out.slice_to(shift).iter().fold(0 as Border, |u,&b| (u<<8)+(b as Border)));
+            out[..shift].iter().fold(0 as Border, |u,&b| (u<<8)+(b as Border)));
         (value, shift)
     }
 }
@@ -205,7 +210,7 @@ pub struct Encoder<W> {
     range: RangeEncoder,
 }
 
-impl<W: Writer> Encoder<W> {
+impl<W: Write> Encoder<W> {
     /// Create a new encoder on top of a given Writer
     pub fn new(w: W) -> Encoder<W> {
         Encoder {
@@ -215,23 +220,24 @@ impl<W: Writer> Encoder<W> {
     }
 
     /// Encode an abstract value under the given Model
-    pub fn encode<V: Copy + Display, M: Model<V>>(&mut self, value: V, model: &M) -> IoResult<()> {
+    pub fn encode<V: Copy + Display, M: Model<V>>(&mut self, value: V, model: &M) -> io::Result<()> {
         let mut buf = [0 as Symbol; BORDER_BYTES];
-        let num = model.encode(value, &mut self.range, buf.as_mut_slice());
-        self.stream.write(buf.slice_to(num))
+        let num = model.encode(value, &mut self.range, &mut buf[..]);
+        self.stream.write(&buf[..num]).map(|_| ()) 
     }
 
     /// Finish encoding by writing the code tail word
-    pub fn finish(mut self) -> (W, IoResult<()>) {
+    pub fn finish(mut self) -> (W, io::Result<()>) {
         debug_assert!(BORDER_BITS == 32);
         let code = self.range.get_code_tail();
-        let result = self.stream.write_be_u32(code);
+        let result = self.stream.write_u32::<BigEndian>(code)
+                                .map_err(byteorder_err_to_io);
         let result = result.and(self.stream.flush());
         (self.stream, result)
     }
 
     /// Flush the output stream
-    pub fn flush(&mut self) -> IoResult<()> {
+    pub fn flush(&mut self) -> io::Result<()> {
         self.stream.flush()
     }
 
@@ -251,7 +257,7 @@ pub struct Decoder<R> {
     bytes_pending: usize,
 }
 
-impl<R: Reader> Decoder<R> {
+impl<R: Read> Decoder<R> {
     /// Create a decoder on top of a given Reader
     pub fn new(r: R) -> Decoder<R> {
         Decoder {
@@ -262,7 +268,7 @@ impl<R: Reader> Decoder<R> {
         }
     }
 
-    fn feed(&mut self) -> IoResult<()> {
+    fn feed(&mut self) -> io::Result<()> {
         while self.bytes_pending != 0 {
             let b = try!(self.stream.read_u8());
             self.code = (self.code<<8) + (b as Border);
@@ -272,7 +278,7 @@ impl<R: Reader> Decoder<R> {
     }
 
     /// Decode an abstract value based on the given Model
-    pub fn decode<V: Copy + Display, M: Model<V>>(&mut self, model: &M) -> IoResult<V> {
+    pub fn decode<V: Copy + Display, M: Model<V>>(&mut self, model: &M) -> io::Result<V> {
         self.feed().unwrap();
         let (value, shift) = model.decode(self.code, &mut self.range);
         self.bytes_pending = shift;
@@ -280,7 +286,7 @@ impl<R: Reader> Decoder<R> {
     }
 
     /// Finish decoding
-    pub fn finish(mut self) -> (R, IoResult<()>)  {
+    pub fn finish(mut self) -> (R, io::Result<()>)  {
         let err = self.feed();
         (self.stream, err)
     }

@@ -8,12 +8,15 @@ interfaces wrapping an underlying stream.
 
 # Example
 
-```rust
+```rust,ignore
 use compress::lz4;
-use std::old_io::File;
+use std::fs::File;
+use std::path::Path;
+use std::io::Read;
 
-let stream = File::open(&Path::new("path/to/file.lz4"));
-let decompressed = lz4::Decoder::new(stream).read_to_end();
+let stream = File::open(&Path::new("path/to/file.lz4")).unwrap();
+let mut decompressed = Vec::new();
+lz4::Decoder::new(stream).read_to_end(&mut decompressed);
 ```
 
 # Credit
@@ -24,10 +27,15 @@ can be found at https://github.com/bkaradzic/go-lz4.
 */
 
 use std::cmp;
-use std::old_io;
+use std::io::{self, Read, Write};
 use std::iter::repeat;
 use std::slice;
 use std::vec::Vec;
+use std::num::Wrapping;
+use std::ops::Shr;
+
+use super::byteorder::{LittleEndian, WriteBytesExt, ReadBytesExt};
+use super::{ReadExact, byteorder_err_to_io};
 
 const MAGIC: u32 = 0x184d2204;
 
@@ -66,8 +74,8 @@ impl<'a> BlockDecoder<'a> {
                 debug!("consume len {}", len);
                 let end = self.end;
                 self.grow_output(end + len);
-                slice::bytes::copy_memory(self.output.slice_from_mut(end),
-                                          self.input.slice(self.cur, self.cur + len));
+                slice::bytes::copy_memory(&self.input[self.cur..(self.cur + len)],
+                                          &mut self.output[end..]);
                 self.end += len;
                 self.cur += len;
             }
@@ -118,7 +126,7 @@ impl<'a> BlockDecoder<'a> {
     fn cp(&mut self, len: usize, decr: usize) {
         let end = self.end;
         self.grow_output(end + len);
-        for i in range(0, len) {
+        for i in 0..len {
             self.output[end + i] = (*self.output)[self.start + i];
         }
 
@@ -198,7 +206,7 @@ impl<'a> BlockEncoder<'a> {
 
         // FIXME: find out why slicing syntax fails tests
         //self.output[self.dest_pos as usize .. (self.dest_pos + len) as usize] = self.input[pos as uint.. (pos + len) as uint];
-        for i in range(0, len as usize) {
+        for i in 0..(len as usize) {
             self.output[self.dest_pos as usize + i] = self.input[pos as usize + i];
         }
 
@@ -227,12 +235,11 @@ impl<'a> BlockEncoder<'a> {
                     }
 
                     let seq = self.seq_at(self.pos);
+                    let hash = (Wrapping(seq) * Wrapping(2654435761)).shr(HASH_SHIFT as usize).0;
+                    let mut r = (Wrapping(self.hash_table[hash as usize]) + Wrapping(UNINITHASH)).0;
+                    self.hash_table[hash as usize] = (Wrapping(self.pos) - Wrapping(UNINITHASH)).0;
 
-                    let hash = (seq * 2654435761) >> (HASH_SHIFT as usize);
-                    let mut r = self.hash_table[hash as usize] + UNINITHASH;
-                    self.hash_table[hash as usize] = self.pos - UNINITHASH;
-
-                    if ((self.pos - r) >> 16) != 0 || seq != self.seq_at(r) {
+                    if (Wrapping(self.pos) - Wrapping(r)).shr(16).0 != 0 || seq != self.seq_at(r) {
                         if self.pos - self.anchor > limit {
                             limit = limit << 1;
                             step += 1 + (step >> 2);
@@ -312,7 +319,7 @@ pub struct Decoder<R> {
     max_block_size: usize,
 }
 
-impl<R: Reader> Decoder<R> {
+impl<R: Read + Sized> Decoder<R> {
     /// Creates a new decoder which will read data from the given stream. The
     /// inner stream can be re-acquired by moving out of the `r` field of this
     /// structure.
@@ -340,20 +347,20 @@ impl<R: Reader> Decoder<R> {
         self.end = 0;
     }
 
-    fn read_header(&mut self) -> old_io::IoResult<()> {
+    fn read_header(&mut self) -> io::Result<()> {
         // Make sure the magic number is what's expected.
-        if try!(self.r.read_le_u32()) != MAGIC {
-            return Err(old_io::standard_error(old_io::InvalidInput))
+        if try!(self.r.read_u32::<LittleEndian>()) != MAGIC {
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, ""))
         }
 
         let mut bits = [0; 3];
-        try!(self.r.read(bits.slice_to_mut(2)));
+        try!(self.r.read(&mut bits[..2]));
         let flg = bits[0];
         let bd = bits[1];
 
         // bits 7/6, the version number. Right now this must be 1
         if (flg >> 6) != 0b01 {
-            return Err(old_io::standard_error(old_io::InvalidInput))
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, ""))
         }
         // bit 5 is the "block independence", don't care about this yet
         // bit 4 is whether blocks have checksums or not
@@ -380,7 +387,7 @@ impl<R: Reader> Decoder<R> {
 
         // read off other portions of the stream
         let size = if stream_size {
-            Some(try!(self.r.read_le_u64()))
+            Some(try!(self.r.read_u64::<LittleEndian>()))
         } else {
             None
         };
@@ -394,13 +401,13 @@ impl<R: Reader> Decoder<R> {
         self.max_block_size = max_block_size;
 
         // XXX: implement checksums
-        let cksum = try!(self.r.read_byte());
+        let cksum = try!(self.r.read_u8());
         debug!("ignoring header checksum: {}", cksum);
         return Ok(());
     }
 
-    fn decode_block(&mut self) -> old_io::IoResult<bool> {
-        match try!(self.r.read_le_u32()) {
+    fn decode_block(&mut self) -> io::Result<bool> {
+        match try!(self.r.read_u32::<LittleEndian>()) {
             // final block, we're done here
             0 => return Ok(false),
 
@@ -409,7 +416,7 @@ impl<R: Reader> Decoder<R> {
                 let amt = (n & 0x7fffffff) as usize;
                 self.output.truncate(0);
                 self.output.reserve(amt);
-                try!(self.r.push_at_least(amt, amt, &mut self.output));
+                try!(self.r.push_exactly(amt as u64, &mut self.output));
                 self.start = 0;
                 self.end = amt;
             }
@@ -419,13 +426,13 @@ impl<R: Reader> Decoder<R> {
                 let n = n as usize;
                 self.temp.truncate(0);
                 self.temp.reserve(n);
-                try!(self.r.push_at_least(n, n, &mut self.temp));
+                try!(self.r.push_exactly(n as u64, &mut self.temp));
 
                 let target = cmp::min(self.max_block_size, 4 * n / 3);
                 self.output.truncate(0);
                 self.output.reserve(target);
                 let mut decoder = BlockDecoder {
-                    input: self.temp.slice_to(n),
+                    input: &self.temp[..n],
                     output: &mut self.output,
                     cur: 0,
                     start: 0,
@@ -437,19 +444,19 @@ impl<R: Reader> Decoder<R> {
         }
 
         if self.blk_checksum {
-            let cksum = try!(self.r.read_le_u32());
+            let cksum = try!(self.r.read_u32::<LittleEndian>());
             debug!("ignoring block checksum {}", cksum);
         }
         return Ok(true);
     }
 
     /// Tests whether the end of this LZ4 stream has been reached
-    pub fn eof(&mut self) -> bool { return self.eof }
+    pub fn eof(&mut self) -> bool { self.eof }
 }
 
-impl<R: Reader> Reader for Decoder<R> {
-    fn read(&mut self, dst: &mut [u8]) -> old_io::IoResult<usize> {
-        if self.eof { return Err(old_io::standard_error(old_io::EndOfFile)) }
+impl<R: Read> Read for Decoder<R> {
+    fn read(&mut self, dst: &mut [u8]) -> io::Result<usize> {
+        if self.eof { return Ok(0) }
         if !self.header {
             try!(self.read_header());
             self.header = true;
@@ -466,13 +473,13 @@ impl<R: Reader> Reader for Decoder<R> {
                 }
             }
             let n = cmp::min(amt, self.end - self.start);
-            slice::bytes::copy_memory(dst.slice_from_mut(len - amt),
-                                    self.output.slice(self.start, self.start + n));
+            slice::bytes::copy_memory(&self.output[self.start..(self.start + n)],
+                                      &mut dst[(len - amt)..]);
             self.start += n;
             amt -= n;
         }
 
-        return Ok(len - amt);
+        Ok(len - amt)
     }
 }
 
@@ -487,7 +494,7 @@ pub struct Encoder<W> {
     limit: usize,
 }
 
-impl<W: Writer> Encoder<W> {
+impl<W: Write> Encoder<W> {
     /// Creates a new encoder which will have its output written to the given
     /// output stream. The output stream can be re-acquired by calling
     /// `finish()`
@@ -504,14 +511,14 @@ impl<W: Writer> Encoder<W> {
         }
     }
 
-    fn encode_block(&mut self) -> old_io::IoResult<()> {
+    fn encode_block(&mut self) -> io::Result<()> {
         self.tmp.truncate(0);
         if self.compress() {
-            try!(self.w.write_le_u32(self.tmp.len() as u32));
-            try!(self.w.write(self.tmp.as_slice()))
+            try!(self.w.write_u32::<LittleEndian>(self.tmp.len() as u32));
+            try!(self.w.write(&self.tmp));
         } else {
-            try!(self.w.write_le_u32((self.buf.len() as u32) | 0x80000000));
-            try!(self.w.write(self.buf.as_slice()))
+            try!(self.w.write_u32::<LittleEndian>((self.buf.len() as u32) | 0x80000000));
+            try!(self.w.write(&self.buf));
         }
         self.buf.truncate(0);
         Ok(())
@@ -524,19 +531,24 @@ impl<W: Writer> Encoder<W> {
     /// This function is used to flag that this session of compression is done
     /// with. The stream is finished up (final bytes are written), and then the
     /// wrapped writer is returned.
-    pub fn finish(mut self) -> (W, old_io::IoResult<()>) {
-        let result = self.flush();
-        let result = result.and(self.w.write_le_u32(0));
-        // XXX: this checksum is wrong
-        let result = result.and(self.w.write_le_u32(0));
+    pub fn finish(mut self) -> (W, io::Result<()>) {
+        let mut result = self.flush();
+
+        for _ in 0..2 {
+            let tmp = self.w.write_u32::<LittleEndian>(0)
+                            .map_err(byteorder_err_to_io);
+
+            result = result.and_then(|_| tmp);
+        }
+
         (self.w, result)
     }
 }
 
-impl<W: Writer> Writer for Encoder<W> {
-    fn write_all(&mut self, mut buf: &[u8]) -> old_io::IoResult<()> {
+impl<W: Write> Write for Encoder<W> {
+    fn write(&mut self, mut buf: &[u8]) -> io::Result<usize> {
         if !self.wrote_header {
-            try!(self.w.write_le_u32(MAGIC));
+            try!(self.w.write_u32::<LittleEndian>(MAGIC));
             // version 01, turn on block independence, but turn off
             // everything else (we have no checksums right now).
             try!(self.w.write_u8(0b01_100000));
@@ -549,17 +561,18 @@ impl<W: Writer> Writer for Encoder<W> {
 
         while buf.len() > 0 {
             let amt = cmp::min(self.limit - self.buf.len(), buf.len());
-            self.buf.push_all(buf.slice_to(amt));
+            self.buf.push_all(&buf[..amt]);
 
             if self.buf.len() == self.limit {
                 try!(self.encode_block());
             }
-            buf = buf.slice_from(amt);
+            buf = &buf[amt..];
         }
-        Ok(())
+
+        Ok(buf.len())
     }
 
-    fn flush(&mut self) -> old_io::IoResult<()> {
+    fn flush(&mut self) -> io::Result<()> {
         if self.buf.len() > 0 {
             try!(self.encode_block());
         }
@@ -599,16 +612,19 @@ pub fn encode_block(input: &[u8], output: &mut Vec<u8>) -> usize {
 
 #[cfg(test)]
 mod test {
-    use std::old_io::{BufReader, MemWriter};
-    use std::rand;
+    use std::io::{BufReader, BufWriter, Read, Write};
+    use super::super::rand;
     use super::{Decoder, Encoder};
     use test;
 
+    use super::super::byteorder::ReadBytesExt;
+
     fn test_decode(input: &[u8], output: &[u8]) {
         let mut d = Decoder::new(BufReader::new(input));
+        let mut buf = Vec::new();
 
-        let got = d.read_to_end().unwrap();
-        assert!(got.as_slice() == output);
+        d.read_to_end(&mut buf).unwrap();
+        assert!(&buf[..] == output);
     }
 
     #[test]
@@ -633,54 +649,56 @@ mod test {
         super::encode_block(data, &mut encoded);
         let mut decoded = Vec::new();
 
-        super::decode_block(encoded.as_slice(), &mut decoded);
+        super::decode_block(&encoded[..], &mut decoded);
 
-        assert_eq!(data, decoded.as_slice());
+        assert_eq!(&data[..], &decoded[..]);
     }
 
     #[test]
     fn one_byte_at_a_time() {
         let input = include_bytes!("data/test.lz4.1");
-        let mut d = Decoder::new(BufReader::new(input));
+        let mut d = Decoder::new(BufReader::new(&input[..]));
         assert!(!d.eof());
         let mut out = Vec::new();
         loop {
-            match d.read_byte() {
+            match d.read_u8() {
                 Ok(b) => out.push(b),
                 Err(..) => break
             }
         }
         assert!(d.eof());
-        assert!(out.as_slice() == include_bytes!("data/test.txt"));
+        assert!(&out[..] == &include_bytes!("data/test.txt")[..]);
     }
 
     #[test]
     fn random_byte_lengths() {
         let input = include_bytes!("data/test.lz4.1");
-        let mut d = Decoder::new(BufReader::new(input));
+        let mut d = Decoder::new(BufReader::new(&input[..]));
         let mut out = Vec::new();
         let mut buf = [0u8; 40];
         loop {
-            match d.read(buf.slice_to_mut(1 + rand::random::<usize>() % 40)) {
+            match d.read(&mut buf[..(1 + rand::random::<usize>() % 40)]) {
+                Ok(0) => break,
                 Ok(n) => {
-                    out.push_all(buf.slice_to(n));
+                    out.push_all(&buf[..n]);
                 }
                 Err(..) => break
             }
         }
-        assert!(out.as_slice() == include_bytes!("data/test.txt"));
+        assert!(&out[..] == &include_bytes!("data/test.txt")[..]);
     }
 
     fn roundtrip(bytes: &[u8]) {
-        let mut e = Encoder::new(MemWriter::new());
+        let mut e = Encoder::new(BufWriter::new(Vec::new()));
         e.write(bytes).unwrap();
         let (e, err) = e.finish();
         err.unwrap();
-        let encoded = e.into_inner();
+        let encoded = e.into_inner().unwrap();
 
-        let mut d = Decoder::new(BufReader::new(encoded.as_slice()));
-        let decoded = d.read_to_end().unwrap();
-        assert_eq!(decoded.as_slice(), bytes);
+        let mut d = Decoder::new(BufReader::new(&encoded[..]));
+        let mut decoded = Vec::new();
+        d.read_to_end(&mut decoded).unwrap();
+        assert_eq!(&decoded[..], bytes);
     }
 
     #[test]
@@ -693,11 +711,11 @@ mod test {
     #[bench]
     fn decompress_speed(bh: &mut test::Bencher) {
         let input = include_bytes!("data/test.lz4.9");
-        let mut d = Decoder::new(BufReader::new(input));
+        let mut d = Decoder::new(BufReader::new(&input[..]));
         let mut output = [0u8; 65536];
         let mut output_size = 0;
         bh.iter(|| {
-            d.r = BufReader::new(input);
+            d.r = BufReader::new(&input[..]);
             d.reset();
             output_size = d.read(&mut output).unwrap();
         });

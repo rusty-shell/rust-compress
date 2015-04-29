@@ -5,12 +5,14 @@
 //!
 //! # Example
 //!
-//! ```rust
+//! ```rust,ignore
 //! use compress::flate;
-//! use std::old_io::File;
+//! use std::fs::File;
+//! use std::path::Path;
 //!
-//! let stream = File::open(&Path::new("path/to/file.flate"));
-//! let decompressed = flate::Decoder::new(stream).read_to_end();
+//! let stream = File::open(&Path::new("path/to/file.flate")).unwrap();
+//! let mut decompressed = Vec::new();
+//! flate::Decoder::new(stream).read_to_end(&mut decompressed);
 //! ```
 //!
 //! # Related links
@@ -23,9 +25,12 @@
 //!   Much of this code is based on the puff.c implementation found here
 
 use std::cmp;
-use std::old_io;
+use std::io::{self, Read};
 use std::slice;
 use std::vec::Vec;
+
+use super::byteorder::{LittleEndian, ReadBytesExt};
+use super::ReadExact;
 
 const MAXBITS: usize = 15;
 const MAXLCODES: u16 = 286;
@@ -44,10 +49,10 @@ enum Error {
     NotEnoughBits,
 }
 
-fn error<T>(e: Error) -> old_io::IoResult<T> {
-    Err(old_io::IoError {
-        kind: old_io::InvalidInput,
-        desc: match e {
+fn error<T>(e: Error) -> io::Result<T> {
+    Err(io::Error::new(
+        io::ErrorKind::InvalidInput,
+        match e {
             Error::HuffmanTreeTooLarge => "huffman tree too large",
             Error::InvalidBlockCode => "invalid block code",
             Error::InvalidHuffmanHeaderSymbol => "invalid huffman header symbol",
@@ -56,9 +61,8 @@ fn error<T>(e: Error) -> old_io::IoResult<T> {
             Error::InvalidHuffmanCode => "invalid huffman code",
             Error::InvalidStaticSize => "invalid static size",
             Error::NotEnoughBits => "not enough bits",
-        },
-        detail: None,
-    })
+        }
+    ))
 }
 
 struct HuffmanTree {
@@ -75,7 +79,7 @@ impl HuffmanTree {
     /// Constructs a new huffman tree for decoding. If the given array has
     /// length N, then the huffman tree can be used to decode N symbols. Each
     /// entry in the array corresponds to the length of the nth symbol.
-    fn construct(lens: &[u16]) -> old_io::IoResult<HuffmanTree> {
+    fn construct(lens: &[u16]) -> io::Result<HuffmanTree> {
         let mut tree = HuffmanTree {
             count: [0; MAXBITS + 1],
             symbol: [0; MAXCODES as usize],
@@ -91,7 +95,7 @@ impl HuffmanTree {
         // work with, but if the counts add up to greater than the available
         // amount, then this is an invalid table.
         let mut left = 1;
-        for i in range(1, MAXBITS + 1) {
+        for i in 1..(MAXBITS + 1) {
             left *= 2;
             left -= tree.count[i] as isize;
             if left < 0 { return error(Error::InvalidHuffmanTree) }
@@ -99,7 +103,7 @@ impl HuffmanTree {
 
         // Generate the offset of each length into the 'symbol' array
         let mut offs = [0; MAXBITS + 1];
-        for i in range(1, MAXBITS) {
+        for i in 1..MAXBITS {
             offs[i + 1] = offs[i] + tree.count[i];
         }
 
@@ -121,12 +125,12 @@ impl HuffmanTree {
     /// by a sequence of lengths. The codepoint being decoded needs to figure
     /// out what lengths it's between, and then within that range we can index
     /// into the whole symbol array to pluck out the right symbol.
-    fn decode<R: Reader>(&self, s: &mut Decoder<R>) -> old_io::IoResult<u16> {
+    fn decode<R: Read>(&self, s: &mut Decoder<R>) -> io::Result<u16> {
         // this could be a lot faster.
         let mut code = 0;
         let mut first = 0;
         let mut index = 0;
-        for len in range(1, MAXBITS + 1) {
+        for len in 1..(MAXBITS + 1) {
             code |= try!(s.bits(1));
             let count = self.count[len];
             if code < first + count {
@@ -145,13 +149,13 @@ impl HuffmanTree {
 fn main() {
     static FIXLCODES: usize = 388;
     let mut arr = [0; FIXLCODES];
-    for i in range(0, 144) { arr[i] = 8; }
-    for i in range(144, 256) { arr[i] = 9; }
-    for i in range(256, 280) { arr[i] = 7; }
-    for i in range(280, 288) { arr[i] = 8; }
-    println!("{:?}", HuffmanTree::construct(arr.slice_to(FIXLCODES)));
-    for i in range(0, MAXDCODES) { arr[i] = 5; }
-    println!("{:?}", HuffmanTree::construct(arr.slice_to(MAXDCODES)));
+    for i in 0..144 { arr[i] = 8; }
+    for i in 144..256 { arr[i] = 9; }
+    for i in 256..280 { arr[i] = 7; }
+    for i in 280..288 { arr[i] = 8; }
+    println!("{:?}", HuffmanTree::construct(arr[..FIXLCODES]));
+    for i in 0..MAXDCODES { arr[i] = 5; }
+    println!("{:?}", HuffmanTree::construct(arr[..MAXDCODES]));
 }
 
 /// The structure that is used to decode an LZ4 data stream. This wraps an
@@ -171,7 +175,7 @@ pub struct Decoder<R> {
     eof: bool,
 }
 
-impl<R: Reader> Decoder<R> {
+impl<R: Read> Decoder<R> {
     /// Creates a new flate decoder which will read data from the specified
     /// source
     pub fn new(r: R) -> Decoder<R> {
@@ -187,7 +191,7 @@ impl<R: Reader> Decoder<R> {
         }
     }
 
-    fn block(&mut self) -> old_io::IoResult<()> {
+    fn block(&mut self) -> io::Result<()> {
         self.pos = 0;
         self.block = Vec::with_capacity(4096);
         if try!(self.bits(1)) == 1 { self.eof = true; }
@@ -209,25 +213,25 @@ impl<R: Reader> Decoder<R> {
         let remaining = HISTORY - self.outpos;
         let n = cmp::min(amt, remaining);
         if self.output.len() < HISTORY {
-            self.output.push_all(self.block.slice(from, from + n));
+            self.output.push_all(&self.block[from..(from + n)]);
         } else {
             assert_eq!(self.output.len(), HISTORY);
-            slice::bytes::copy_memory(self.output.slice_from_mut(self.outpos),
-                                    self.block.slice(from, from + n));
+            slice::bytes::copy_memory(&self.block[from..(from + n)],
+                                      &mut self.output[self.outpos..]);
         }
         self.outpos += n;
         if n < amt {
-            slice::bytes::copy_memory(self.output.as_mut_slice(),
-                                    self.block.slice_from(from + n));
+            slice::bytes::copy_memory(&self.block[(from + n)..],
+                                      &mut self.output[..]);
             self.outpos = amt - n;
         }
     }
 
-    fn statik(&mut self) -> old_io::IoResult<()> {
-        let len = try!(self.r.read_le_u16());
-        let nlen = try!(self.r.read_le_u16());
+    fn statik(&mut self) -> io::Result<()> {
+        let len = try!(self.r.read_u16::<LittleEndian>());
+        let nlen = try!(self.r.read_u16::<LittleEndian>());
         if !nlen != len { return error(Error::InvalidStaticSize) }
-        try!(self.r.push_at_least(len as usize, len as usize, &mut self.block));
+        try!(self.r.push_exactly(len as u64, &mut self.block));
         self.update_output(0);
         self.bitcnt = 0;
         self.bitbuf = 0;
@@ -236,9 +240,9 @@ impl<R: Reader> Decoder<R> {
 
     // Bytes in the stream are LSB first, so the bitbuf is appended to from the
     // left and consumed from the right.
-    fn bits(&mut self, cnt: usize) -> old_io::IoResult<u16> {
+    fn bits(&mut self, cnt: usize) -> io::Result<u16> {
         while self.bitcnt < cnt {
-            let byte = try!(self.r.read_byte());
+            let byte = try!(self.r.read_u8());
             self.bitbuf |= (byte as usize) << self.bitcnt;
             self.bitcnt += 8;
         }
@@ -249,7 +253,7 @@ impl<R: Reader> Decoder<R> {
     }
 
     fn codes(&mut self, lens: &HuffmanTree,
-             dist: &HuffmanTree) -> old_io::IoResult<()> {
+             dist: &HuffmanTree) -> io::Result<()> {
         // extra base length for codes 257-285
         static EXTRALENS: [u16; 29] = [
             3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51,
@@ -313,11 +317,11 @@ impl<R: Reader> Decoder<R> {
                     };
                     let min = cmp::min(dist, len);
                     let start = self.block.len();
-                    for _ in range(0, min) {
+                    for _ in 0..min {
                         self.block.push(self.output[finger]);
                         finger = (finger + 1) % HISTORY;
                     }
-                    for i in range(min, len) {
+                    for i in min..len {
                         let b = self.block[start + i - min];
                         self.block.push(b);
                     }
@@ -329,7 +333,7 @@ impl<R: Reader> Decoder<R> {
         Ok(())
     }
 
-    fn fixed(&mut self) -> old_io::IoResult<()> {
+    fn fixed(&mut self) -> io::Result<()> {
         // Generated by the main function above
         static LEN: HuffmanTree = HuffmanTree {
             count: [100, 0, 0, 0, 0, 0, 0, 24, 152, 112, 0, 0, 0, 0, 0, 0],
@@ -383,7 +387,7 @@ impl<R: Reader> Decoder<R> {
         self.codes(&LEN, &DIST)
     }
 
-    fn dynamic(&mut self) -> old_io::IoResult<()> {
+    fn dynamic(&mut self) -> io::Result<()> {
         let hlit = try!(self.bits(5)) + 257; // number of length codes
         let hdist = try!(self.bits(5)) + 1;  // number of distance codes
         let hclen = try!(self.bits(4)) + 4;  // number of code length codes
@@ -398,7 +402,7 @@ impl<R: Reader> Decoder<R> {
             16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15,
         ];
         let mut lengths = [0; 19];
-        for i in range(0, hclen as usize) {
+        for i in 0..(hclen as usize) {
             lengths[ORDER[i]] = try!(self.bits(3));
         }
         let tree = try!(HuffmanTree::construct(&lengths));
@@ -417,7 +421,7 @@ impl<R: Reader> Decoder<R> {
                 16 if i == 0 => return error(Error::InvalidHuffmanHeaderSymbol),
                 16 => {
                     let prev = lengths[i as usize - 1];
-                    for _ in range(0, try!(self.bits(2)) + 3) {
+                    for _ in 0..(try!(self.bits(2)) + 3) {
                         lengths[i as usize] = prev;
                         i += 1;
                     }
@@ -431,9 +435,9 @@ impl<R: Reader> Decoder<R> {
         if i > hlit + hdist { return error(Error::InvalidHuffmanTreeHeader) }
 
         // Use the decoded codes to construct yet another huffman tree
-        let arr = lengths.slice_to(hlit as usize);
+        let arr = &lengths[..(hlit as usize)];
         let lencode = try!(HuffmanTree::construct(arr));
-        let arr = lengths.slice(hlit as usize, (hlit + hdist) as usize);
+        let arr = &lengths[(hlit as usize)..((hlit + hdist) as usize)];
         let distcode = try!(HuffmanTree::construct(arr));
         self.codes(&lencode, &distcode)
     }
@@ -454,15 +458,15 @@ impl<R: Reader> Decoder<R> {
     }
 }
 
-impl<R: Reader> Reader for Decoder<R> {
-    fn read(&mut self, buf: &mut [u8]) -> old_io::IoResult<usize> {
+impl<R: Read> Read for Decoder<R> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         if self.pos == self.block.len() {
-            if self.eof { return Err(old_io::standard_error(old_io::EndOfFile)) }
+            if self.eof { return Ok(0) }
             try!(self.block());
         }
         let n = cmp::min(buf.len(), self.block.len() - self.pos);
-        slice::bytes::copy_memory(buf.slice_to_mut(n),
-                                self.block.slice(self.pos, self.pos + n));
+        slice::bytes::copy_memory(&self.block[self.pos..(self.pos + n)],
+                                  &mut buf[..n]);
         self.pos += n;
         Ok(n)
     }
@@ -471,8 +475,9 @@ impl<R: Reader> Reader for Decoder<R> {
 #[cfg(test)]
 #[allow(warnings)]
 mod test {
-    use std::old_io::{BufReader, MemWriter};
-    use std::rand;
+    use std::io::{BufReader, BufWriter, Read, Write};
+    use super::super::rand::{Rand, random};
+    use super::super::byteorder::{LittleEndian, BigEndian, WriteBytesExt, ReadBytesExt};
     use std::str;
     use super::{Decoder};
     use test;
@@ -481,13 +486,16 @@ mod test {
     // program found at http://www.zlib.net/zpipe.c and the zlib format has an
     // extra 2 bytes of header with an 4-byte checksum at the end.
     fn fixup<'a>(s: &'a [u8]) -> &'a [u8] {
-        s.slice(2, s.len() - 4)
+        &s[2..(s.len() - 4)]
     }
 
     fn test_decode(input: &[u8], output: &[u8]) {
         let mut d = Decoder::new(BufReader::new(fixup(input)));
-        let got = d.read_to_end().unwrap();
-        assert!(got.as_slice() == output);
+        let mut buf = Vec::new();
+        d.read_to_end(&mut buf).unwrap();
+
+        assert_eq!(output.len(), buf.len());
+        assert!(&buf[..] == output);
     }
 
     #[test]
@@ -518,13 +526,14 @@ mod test {
         assert!(!d.eof());
         let mut out = Vec::new();
         loop {
-            match d.read_byte() {
+            match d.read_u8() {
                 Ok(b) => out.push(b),
                 Err(..) => break
             }
         }
+
         assert!(d.eof());
-        assert!(out.as_slice() == include_bytes!("data/test.txt"));
+        assert!(&out[..] == &include_bytes!("data/test.txt")[..]);
     }
 
     #[test]
@@ -534,14 +543,14 @@ mod test {
         let mut out = Vec::new();
         let mut buf = [0u8; 40];
         loop {
-            match d.read(buf.slice_to_mut(1 + rand::random::<usize>() % 40)) {
+            match d.read(&mut buf[..(1 + random::<usize>() % 40)]) {
+                Err(..) | Ok(0) => break,
                 Ok(n) => {
-                    out.push_all(buf.slice_to(n));
+                    out.push_all(&buf[..n]);
                 }
-                Err(..) => break
             }
         }
-        assert!(out.as_slice() == include_bytes!("data/test.txt"));
+        assert!(&out[..] == &include_bytes!("data/test.txt")[..]);
     }
 
     //fn roundtrip(bytes: &[u8]) {
@@ -551,7 +560,7 @@ mod test {
     //
     //    let mut d = Decoder::new(BufReader::new(encoded));
     //    let decoded = d.read_to_end();
-    //    assert_eq!(decoded.as_slice(), bytes);
+    //    assert_eq!(&decoded[..], bytes);
     //}
     //
     //#[test]

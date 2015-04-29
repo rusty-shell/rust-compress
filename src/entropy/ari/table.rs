@@ -11,9 +11,8 @@ The module also implements Reader/Writer using simple byte coding.
 
 */
 
-use std::old_io;
+use std::io::{self, Read, Write};
 use super::Border;
-
 
 pub type Frequency = u16;
 
@@ -36,7 +35,7 @@ impl Model {
                          mut fn_init: F) -> Model
         where F: FnMut(usize) -> Frequency
     {
-        let freq: Vec<Frequency> = range(0, num_values).map(|i| fn_init(i)).collect();
+        let freq: Vec<Frequency> = (0..num_values).map(|i| fn_init(i)).collect();
         let total = freq.iter().fold(0 as Border, |u,&f| u+(f as Border));
         let mut ft = Model {
             total: total,
@@ -93,13 +92,13 @@ impl Model {
 
     /// Return read-only frequencies slice
     pub fn get_frequencies<'a>(&'a self) -> &'a [Frequency] {
-        self.table.as_slice()
+        &self.table[..]
     }
 }
 
 impl super::Model<usize> for Model {
     fn get_range(&self, value: usize) -> (Border,Border) {
-        let lo = self.table.slice_to(value).iter().fold(0, |u,&f| u+(f as Border));
+        let lo = self.table[..value].iter().fold(0, |u,&f| u+(f as Border));
         (lo, lo + (self.table[value] as Border))
     }
 
@@ -190,7 +189,7 @@ pub struct ByteEncoder<W> {
     pub freq: Model,
 }
 
-impl<W: Writer> ByteEncoder<W> {
+impl<W: Write> ByteEncoder<W> {
     /// Create a new encoder on top of a given Writer
     pub fn new(w: W) -> ByteEncoder<W> {
         let freq_max = super::RANGE_DEFAULT_THRESHOLD >> 2;
@@ -201,24 +200,25 @@ impl<W: Writer> ByteEncoder<W> {
     }
 
     /// Finish encoding & write the terminator symbol
-    pub fn finish(mut self) -> (W, old_io::IoResult<()>) {
+    pub fn finish(mut self) -> (W, io::Result<()>) {
         let ret = self.encoder.encode(super::SYMBOL_TOTAL, &self.freq);
         let (w,r2) = self.encoder.finish();
         (w, ret.and(r2))
     }
 }
 
-impl<W: Writer> Writer for ByteEncoder<W> {
-    fn write_all(&mut self, buf: &[u8]) -> old_io::IoResult<()> {
-        buf.iter().fold(Ok(()), |result,byte| {
+impl<W: Write> Write for ByteEncoder<W> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        for byte in buf.iter() {
             let value = *byte as usize;
-            let ret = self.encoder.encode(value, &self.freq);
+            try!(self.encoder.encode(value, &self.freq));
             self.freq.update(value, 10, 1);
-            result.and(ret)
-        })
+        }
+
+        Ok(buf.len())
     }
 
-    fn flush(&mut self) -> old_io::IoResult<()> {
+    fn flush(&mut self) -> io::Result<()> {
         self.encoder.flush()
     }
 }
@@ -235,7 +235,7 @@ pub struct ByteDecoder<R> {
     is_eof: bool,
 }
 
-impl<R: Reader> ByteDecoder<R> {
+impl<R: Read> ByteDecoder<R> {
     /// Create a decoder on top of a given Reader
     pub fn new(r: R) -> ByteDecoder<R> {
         let freq_max = super::RANGE_DEFAULT_THRESHOLD >> 2;
@@ -247,15 +247,15 @@ impl<R: Reader> ByteDecoder<R> {
     }
 
     /// Finish decoding
-    pub fn finish(self) -> (R, old_io::IoResult<()>) {
+    pub fn finish(self) -> (R, io::Result<()>) {
         self.decoder.finish()
     }
 }
 
-impl<R: Reader> Reader for ByteDecoder<R> {
-    fn read(&mut self, dst: &mut [u8]) -> old_io::IoResult<usize> {
+impl<R: Read> Read for ByteDecoder<R> {
+    fn read(&mut self, dst: &mut [u8]) -> io::Result<usize> {
         if self.is_eof {
-            return Err(old_io::standard_error(old_io::EndOfFile))
+            return Ok(0)
         }
         let mut amount = 0;
         for out_byte in dst.iter_mut() {
