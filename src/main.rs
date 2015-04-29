@@ -1,6 +1,5 @@
 #![crate_type = "bin"]
 
-#![allow(unstable)]
 #![feature(box_syntax)]
 //! A rust-compress application that allows testing of implemented
 //! algorithms and their combinations using a simple command line.
@@ -10,12 +9,14 @@
 
 #[macro_use] extern crate log;
 extern crate compress;
+extern crate byteorder;
 
 use std::collections::HashMap;
-use std::{old_io, os, str};
-use compress::{bwt, lz4};
+use std::io::{self, Read, Write};
+use std::{env, str};
+use compress::{bwt, lz4, ReadExact};
 use compress::entropy::ari;
-
+use byteorder::{LittleEndian, WriteBytesExt, ReadBytesExt};
 
 static MAGIC    : u32   = 0x73632172;   //=r!cs
 
@@ -27,9 +28,9 @@ struct Config {
 }
 
 impl Config {
-    fn query(args: &[String]) -> Config {
+    fn query<I>(mut args: I) -> Config where I: Iterator<Item = String> + Sized {
         let mut cfg = Config {
-            exe_name: args[0].clone(),
+            exe_name: args.next().unwrap().clone(),
             methods: Vec::new(),
             block_size: 1<<16,
             decompress: false,
@@ -41,12 +42,12 @@ impl Config {
             cfg.block_size = b.parse().unwrap();
         });
 
-        for arg in args.iter().skip(1) {
-			let slice = arg.as_slice();
+        for arg in args {
+			let slice = &arg[..];
             if slice.starts_with("-") {
-                match handlers.iter_mut().find(|&(&k,_)| slice.slice_from(1).starts_with(k)) {
-                    Some((k,h)) => (*h)(slice.slice_from(1+k.len()), &mut cfg),
-                    None => println!("Warning: unrecognized option: {}", arg.as_slice()),
+                match handlers.iter_mut().find(|&(&k,_)| slice[1..].starts_with(k)) {
+                    Some((k,h)) => (*h)(&slice[1+k.len()..], &mut cfg),
+                    None => println!("Warning: unrecognized option: {}", &arg[..]),
                 }
             }else {
                 cfg.methods.push(arg.to_string());
@@ -57,10 +58,10 @@ impl Config {
 }
 
 struct Pass {
-    encode: Box<FnMut(Box<Writer + 'static>, &Config)
-                      -> Box<Writer + 'static> + 'static>,
-    decode: Box<FnMut(Box<Reader + 'static>, &Config)
-                      -> Box<Reader + 'static> + 'static>,
+    encode: Box<FnMut(Box<Write + 'static>, &Config)
+                      -> Box<Write + 'static> + 'static>,
+    decode: Box<FnMut(Box<Read + 'static>, &Config)
+                      -> Box<Read + 'static> + 'static>,
     info: String,
 }
 
@@ -75,73 +76,74 @@ pub fn main() {
     });
     passes.insert("ari".to_string(), Pass {
         encode: box |w,_c| {
-            box ari::ByteEncoder::new(w) as Box<Writer + 'static>
+            box ari::ByteEncoder::new(w) as Box<Write + 'static>
         },
         decode: box |r,_c| {
-            box ari::ByteDecoder::new(r) as Box<Reader + 'static>
+            box ari::ByteDecoder::new(r) as Box<Read + 'static>
         },
         info: "Adaptive arithmetic byte coder".to_string(),
     });
     passes.insert("bwt".to_string(), Pass {
         encode: box |w,c| {
-            box bwt::Encoder::new(w, c.block_size) as Box<Writer + 'static>
+            box bwt::Encoder::new(w, c.block_size) as Box<Write + 'static>
         },
         decode: box |r,_c| {
-            box bwt::Decoder::new(r, true) as Box<Reader + 'static>
+            box bwt::Decoder::new(r, true) as Box<Read + 'static>
         },
         info: "Burrows-Wheeler Transformation".to_string(),
     });
     passes.insert("mtf".to_string(), Pass {
         encode: box |w,_c| {
-            box bwt::mtf::Encoder::new(w) as Box<Writer + 'static>
+            box bwt::mtf::Encoder::new(w) as Box<Write + 'static>
         },
         decode: box |r,_c| {
-            box bwt::mtf::Decoder::new(r) as Box<Reader + 'static>
+            box bwt::mtf::Decoder::new(r) as Box<Read + 'static>
         },
         info: "Move-To-Front Transformation".to_string(),
     });
     /* // looks like we are missing the encoder implementation
     passes.insert(~"flate", Pass {
         encode: |w,_c| {
-            ~flate::Encoder::new(w, true) as ~Writer
+            ~flate::Encoder::new(w, true) as ~Write
         },
         decode: |r,_c| {
-            ~flate::Decoder::new(r, true) as ~Reader
+            ~flate::Decoder::new(r, true) as ~Read
         },
         info: ~"Standardized Ziv-Lempel + Huffman variant",
     });*/
     passes.insert("lz4".to_string(), Pass {
         encode: box |w,_c| {
-            box lz4::Encoder::new(w) as Box<Writer + 'static>
+            box lz4::Encoder::new(w) as Box<Write + 'static>
         },
         decode: box |r,_c| { // LZ4 decoder seem to work
-            box lz4::Decoder::new(r) as Box<Reader + 'static>
+            box lz4::Decoder::new(r) as Box<Read + 'static>
         },
         info: "Ziv-Lempel derivative, focused at speed".to_string(),
     });
 
-    let config = Config::query(os::args().as_slice());
-    let mut input = old_io::stdin();
-    let mut output = old_io::stdout();
+    let config = Config::query(env::args());
+    let mut input = io::stdin();
+    let mut output = io::stdout();
     if config.decompress {
         assert!(config.methods.is_empty(), "Decompression methods are set in stone");
-        match input.read_le_u32() {
+        match input.read_u32::<LittleEndian>() {
             Ok(magic) if magic != MAGIC => {
                 error!("Input is not a rust-compress archive");
                 return
             },
             Err(e) => {
-                error!("Unable to read input: {}", e.to_string());
+                error!("Unable to read input: {:?}", e);
                 return
             },
             _ => () //OK
         }
-        let methods: Vec<_> = range(0, input.read_u8().unwrap() as usize).map(|_| {
-            let len = input.read_u8().unwrap() as usize;
-            let bytes = input.read_exact(len).unwrap();
-            str::from_utf8(bytes.as_slice()).unwrap().to_string()
+        let methods: Vec<_> = (0..(input.read_u8().unwrap() as usize)).map(|_| {
+            let len = input.read_u8().unwrap() as u64;
+            let mut bytes = Vec::new();
+            input.push_exactly(len, &mut bytes).unwrap();
+            str::from_utf8(&bytes[..]).unwrap().to_string()
         }).collect();
-        let mut rsum: Box<Reader> = box input;
+        let mut rsum: Box<Read> = box input;
         for met in methods.iter() {
             info!("Found pass {}", *met);
             match passes.get_mut(met) {
@@ -149,7 +151,7 @@ pub fn main() {
                 None => panic!("Pass is not implemented"),
             }
         }
-        old_io::util::copy(&mut rsum, &mut output).unwrap();
+        io::copy(&mut rsum, &mut output).unwrap();
     }else if config.methods.is_empty() {
         println!("rust-compress test application");
         println!("Usage:");
@@ -162,20 +164,20 @@ pub fn main() {
             println!("\t{} = {}", *name, pa.info);
         }
     }else {
-        output.write_le_u32(MAGIC).unwrap();
+        output.write_u32::<LittleEndian>(MAGIC).unwrap();
         output.write_u8(config.methods.len() as u8).unwrap();
         for met in config.methods.iter() {
             output.write_u8(met.len() as u8).unwrap();
-            output.write_str(met.as_slice()).unwrap();
+            output.write_all(met.as_bytes()).unwrap();
         }
-        let mut wsum: Box<Writer> = box output;
+        let mut wsum: Box<Write> = box output;
         for met in config.methods.iter() {
             match passes.get_mut(met) {
                 Some(pa) => wsum = (pa.encode)(wsum, &config),
                 None => panic!("Pass {} is not implemented", *met)
             }
         }
-        old_io::util::copy(&mut input, &mut wsum).unwrap();
+        io::copy(&mut input, &mut wsum).unwrap();
         wsum.flush().unwrap();
     }
 }

@@ -14,7 +14,7 @@ use compress::bwt::dc;
 
 let bytes = b"abracadabra";
 let distances = dc::encode_simple::<usize>(bytes);
-let decoded = dc::decode_simple(bytes.len(), distances.as_slice());
+let decoded = dc::decode_simple(bytes.len(), &distances[..]);
 ```
 
 # Credit
@@ -24,10 +24,10 @@ Thanks to Edgar Binder for inventing DC!
 
 */
 
-use std::old_io;
+use std::io;
 use std::iter::{self, repeat};
 use std::slice as vec;
-use std::num::{NumCast, ToPrimitive};
+use super::num::traits::{NumCast, ToPrimitive};
 use super::mtf::MTF;
 
 pub type Symbol = u8;
@@ -95,9 +95,9 @@ impl<'a, 'b, D> Iterator for EncodeIterator<'a,'b,D>
             let rank = self.last_active - self.pos[*sym as usize];
             assert!(rank < TOTAL_SYMBOLS);
             self.last_active = i+1;
-            self.pos[*sym as usize] = i + 1 + d.to_uint().unwrap();
+            self.pos[*sym as usize] = i + 1 + d.to_usize().unwrap();
             debug!("Encoding distance {} at pos {} for symbol {}, computed rank {}, predicting next at {}",
-                d.to_uint().unwrap(), i, *sym, rank, self.pos[*sym as usize]);
+                d.to_usize().unwrap(), i, *sym, rank, self.pos[*sym as usize]);
             (d.clone(), Context::new(*sym, rank as Rank, self.size-i))
         })
     }
@@ -136,7 +136,7 @@ pub fn encode<'a, 'b, D: Clone + Copy + Eq + NumCast>(input: &'a [Symbol], dista
             }
         }
     }
-    for (rank,&sym) in mtf.symbols.slice_to(num_unique).iter().enumerate() {
+    for (rank,&sym) in mtf.symbols[..num_unique].iter().enumerate() {
         let base = last[sym as usize];
         debug!("\tSweep symbol {} of rank {}, last known at {}, encoding {}", sym, rank, base, n-base-rank-1);
         assert!(n >= base+rank+1);
@@ -154,14 +154,14 @@ pub fn encode_simple<D: Clone + Copy + Eq + NumCast>(input: &[Symbol]) -> Vec<D>
     let n = input.len();
     let mut raw_dist: Vec<D> = repeat(NumCast::from(0).unwrap()).take(n).collect();
     let mut eniter = encode(input, raw_dist.as_mut_slice(), &mut MTF::new());
-    let init: Vec<D> = range(0, TOTAL_SYMBOLS).map(|i| NumCast::from(eniter.get_init()[i]).unwrap()).collect();
+    let init: Vec<D> = (0..TOTAL_SYMBOLS).map(|i| NumCast::from(eniter.get_init()[i]).unwrap()).collect();
     init.iter().map(|d| d.clone()).chain(eniter.by_ref().map(|(d,_)| d)).collect()
 }
 
 /// Decode a block of distances given the initial symbol positions
 pub fn decode<F>(mut next: [usize; TOTAL_SYMBOLS], output: &mut [Symbol], mtf: &mut MTF,
-                 mut fn_dist: F) -> old_io::IoResult<()>
-    where F: FnMut(Context) -> old_io::IoResult<usize>
+                 mut fn_dist: F) -> io::Result<()>
+    where F: FnMut(Context) -> io::Result<usize>
 {
 
     let n = output.len();
@@ -188,7 +188,7 @@ pub fn decode<F>(mut next: [usize; TOTAL_SYMBOLS], output: &mut [Symbol], mtf: &
 
     let alphabet_size = i;
     let mut ranks = [0 as Rank; TOTAL_SYMBOLS];
-    for rank in range(0, i) {
+    for rank in 0..i {
         let sym = mtf.symbols[rank];
         debug!("\tRegistering symbol {} of rank {} at position {}",
             sym, rank, next[sym as usize]);
@@ -236,16 +236,16 @@ pub fn decode<F>(mut next: [usize; TOTAL_SYMBOLS], output: &mut [Symbol], mtf: &
 pub fn decode_simple<D: ToPrimitive>(n: usize, distances: &[D]) -> Vec<Symbol> {
     let mut output: Vec<Symbol> = repeat(0 as Symbol).take(n).collect();
     let mut init = [0; TOTAL_SYMBOLS];
-    for i in range(0, TOTAL_SYMBOLS) {
-        init[i] = distances[i].to_uint().unwrap();
+    for i in 0..TOTAL_SYMBOLS {
+        init[i] = distances[i].to_usize().unwrap();
     }
     let mut di = TOTAL_SYMBOLS;
-    decode(init, output.as_mut_slice(), &mut MTF::new(), |_ctx| {
+    decode(init, &mut output[..], &mut MTF::new(), |_ctx| {
         di += 1;
         if di > distances.len() {
-            Err(old_io::standard_error(old_io::EndOfFile))
+            Err(io::Error::new(io::ErrorKind::Other, "Unexpected end of file"))
         }else {
-            Ok(distances[di-1].to_uint().unwrap())
+            Ok(distances[di-1].to_usize().unwrap())
         }
     }).unwrap();
     output.into_iter().collect()
@@ -260,8 +260,8 @@ mod test {
         info!("Roundtrip DC of size {}", bytes.len());
         let distances = super::encode_simple::<usize>(bytes);
         debug!("Roundtrip DC input: {:?}, distances: {:?}", bytes, distances);
-        let decoded = super::decode_simple(bytes.len(), distances.as_slice());
-        assert_eq!(decoded.as_slice(), bytes);
+        let decoded = super::decode_simple(bytes.len(), &distances[..]);
+        assert_eq!(&decoded[..], bytes);
     }
 
     /// rountrip version that compares the coding contexts on the way
@@ -270,22 +270,22 @@ mod test {
         info!("Roundtrip DC context of size {}", n);
         let mut mtf = super::super::mtf::MTF::new();
         let mut raw_dist: Vec<u16> = repeat(0).take(n).collect();
-        let eniter = super::encode(bytes, raw_dist.as_mut_slice(), &mut mtf);
+        let eniter = super::encode(bytes, &mut raw_dist[..], &mut mtf);
         let mut init = [0; super::TOTAL_SYMBOLS];
-        for i in range(0, super::TOTAL_SYMBOLS) {
+        for i in 0..super::TOTAL_SYMBOLS {
             init[i] = eniter.get_init()[i];
         }
         // implicit iterator copies, or we can gather in one pass and then split
         let (distances, contexts): (Vec<_>, Vec<_>) = eniter.unzip();
         let mut output: Vec<u8> = repeat(0).take(n).collect();
         let mut di = 0;
-        super::decode(init, output.as_mut_slice(), &mut mtf, |ctx| {
-            assert_eq!(contexts.as_slice()[di], ctx);
+        super::decode(init, &mut output[..], &mut mtf, |ctx| {
+            assert_eq!(contexts[di], ctx);
             di += 1;
-            Ok(distances.as_slice()[di-1] as usize)
+            Ok(distances[di-1] as usize)
         }).unwrap();
         assert_eq!(di, distances.len());
-        assert_eq!(output.as_slice(), bytes);
+        assert_eq!(&output[..], bytes);
     }
 
     #[test]

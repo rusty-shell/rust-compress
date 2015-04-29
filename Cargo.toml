@@ -21,3 +21,6 @@ doc = false
 
 [dependencies]
 log = "0.2.2"
+num = "0.1"
+rand = "*"
+byteorder = "*"

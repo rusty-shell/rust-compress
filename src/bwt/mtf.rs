@@ -16,20 +16,25 @@ use compress::bwt::mtf;
 
 // Encode a stream of bytes
 let bytes = b"abracadabra";
-let mut e = mtf::Encoder::new(old_io::MemWriter::new());
+let mut e = mtf::Encoder::new(io::BufWriter::new());
 e.write(bytes).unwrap();
 let encoded = e.finish().unwrap();
 
 // Decode a stream of ranks
-let mut d = mtf::Decoder::new(old_io::BufReader::new(encoded.as_slice()));
-let decoded = d.read_to_end().unwrap();
+let mut d = mtf::Decoder::new(io::BufReader::new(&encoded));
+let mut decoded = Vec::new();
+let result = d.read_to_end(&mut decoded).unwrap();
 ```
 
 # Credit
 
 */
 
-use std::{old_io, iter, mem};
+use std::{iter, mem};
+use std::io::{self, Read, Write};
+
+use super::super::byteorder::{WriteBytesExt, ReadBytesExt};
+use super::super::byteorder_err_to_io;
 
 pub type Symbol = u8;
 pub type Rank = u8;
@@ -110,16 +115,16 @@ impl<W> Encoder<W> {
     }
 }
 
-impl<W: Writer> Writer for Encoder<W> {
-    fn write_all(&mut self, buf: &[u8]) -> old_io::IoResult<()> {
+impl<W: Write> Write for Encoder<W> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         for sym in buf.iter() {
             let rank = self.mtf.encode(*sym);
             try!(self.w.write_u8(rank));
         }
-        Ok(())
+        Ok(buf.len())
     }
 
-    fn flush(&mut self) -> old_io::IoResult<()> {
+    fn flush(&mut self) -> io::Result<()> {
         self.w.flush()
     }
 }
@@ -148,14 +153,14 @@ impl<R> Decoder<R> {
     }
 }
 
-impl<R: Reader> Reader for Decoder<R> {
-    fn read(&mut self, dst: &mut [u8]) -> old_io::IoResult<usize> {
+impl<R: Read> Read for Decoder<R> {
+    fn read(&mut self, dst: &mut [u8]) -> io::Result<usize> {
         let mut bytes_read = 0;
         for sym in dst.iter_mut() {
             let rank = match self.r.read_u8() {
+                Ok(0) => break,
                 Ok(r) => r,
-                Err(old_io::IoError{kind: old_io::EndOfFile, ..}) if bytes_read!=0 => break,
-                Err(e) => return Err(e)
+                Err(e) => return Err(byteorder_err_to_io(e))
             };
             bytes_read += 1;
             *sym = self.mtf.decode(rank);
@@ -167,19 +172,20 @@ impl<R: Reader> Reader for Decoder<R> {
 
 #[cfg(test)]
 mod test {
-    use std::old_io;
+    use std::io::{self, Read, Write};
     use test::Bencher;
     use super::{Encoder, Decoder};
 
     fn roundtrip(bytes: &[u8]) {
         info!("Roundtrip MTF of size {}", bytes.len());
-        let mut e = Encoder::new(old_io::MemWriter::new());
+        let mut e = Encoder::new(io::BufWriter::new());
         e.write(bytes).unwrap();
-        let encoded = e.finish().into_inner();
+        let encoded = e.finish().into_inner().unwrap();
         debug!("Roundtrip MTF input: {:?}, ranks: {:?}", bytes, encoded);
-        let mut d = Decoder::new(old_io::BufReader::new(encoded.as_slice()));
-        let decoded = d.read_to_end().unwrap();
-        assert_eq!(decoded.as_slice(), bytes);
+        let mut d = Decoder::new(io::BufReader::new(&encoded));
+        let mut decoded = Vec::new();
+        d.read_to_end(&mut decoded).unwrap();
+        assert_eq!(&decoded[..], bytes);
     }
 
     #[test]
@@ -191,8 +197,9 @@ mod test {
 
     #[bench]
     fn encode_speed(bh: &mut Bencher) {
+        let vec = Vec::new();
         let input = include_bytes!("../data/test.txt");
-        let mem = old_io::MemWriter::with_capacity(input.len());
+        let mem = io::BufWriter::with_capacity(input.len(), vec);
         let mut e = Encoder::new(mem);
         bh.iter(|| {
             e.write(input).unwrap();
@@ -202,13 +209,15 @@ mod test {
 
     #[bench]
     fn decode_speed(bh: &mut Bencher) {
+        let vec = Vec::new();
         let input = include_bytes!("../data/test.txt");
-        let mut e = Encoder::new(old_io::MemWriter::new());
+        let mut e = Encoder::new(io::BufWriter::new(vec));
         e.write(input).unwrap();
-        let encoded = e.finish().into_inner();
+        let encoded = e.finish().into_inner().unwrap();
         bh.iter(|| {
-            let mut d = Decoder::new(old_io::BufReader::new(encoded.as_slice()));
-            d.read_to_end().unwrap();
+            let mut d = Decoder::new(io::BufReader::new(&encoded));
+            let mut buf = Vec::new();
+            d.read_to_end(&mut buf).unwrap();
         });
         bh.bytes = input.len() as u64;
     }

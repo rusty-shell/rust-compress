@@ -25,20 +25,21 @@ EC (Entropy Coder): Huffman, Arithmetic, RC (Range Coder)
 
 ```rust
 # #[allow(unused_must_use)];
-use std::old_io::{MemWriter, MemReader};
+use std::io::{BufWriter, BufReader};
 use compress::bwt;
 
 // Encode some text
 let text = "some text";
-let mut e = bwt::Encoder::new(MemWriter::new(), 4 << 20);
+let mut e = bwt::Encoder::new(BufWriter::new(Vec::new()), 4 << 20);
 e.write_str(text);
 let (encoded, _) = e.finish();
 
 // Decode the encoded text
-let mut d = bwt::Decoder::new(MemReader::new(encoded.unwrap()), true);
-let decoded = d.read_to_end().unwrap();
+let mut d = bwt::Decoder::new(BufReader::new(encoded.unwrap()), true);
+let mut decoded = Vec::new();
+let result = d.read_to_end(&mut decoded).unwrap();
 
-assert_eq!(decoded.as_slice(), text.as_bytes());
+assert_eq!(&decoded[..], text.as_bytes());
 ```
 
 # Credit
@@ -49,10 +50,15 @@ This is an original (mostly trivial) implementation.
 
 #![allow(missing_docs)]
 
-use std::{cmp, fmt, old_io, slice};
-use std::iter::{self, Extend, repeat};
-use std::num::{NumCast, ToPrimitive};
+extern crate num;
 
+use std::{cmp, fmt, slice};
+use std::iter::{self, Extend, repeat};
+use std::io::{self, Read, Write};
+use self::num::traits::{NumCast, ToPrimitive};
+
+use super::byteorder::{LittleEndian, WriteBytesExt, ReadBytesExt};
+use super::{byteorder_err_to_io, ReadExact};
 
 pub mod dc;
 pub mod mtf;
@@ -132,7 +138,7 @@ pub fn compute_suffixes<SUF: NumCast + ToPrimitive + fmt::Debug>(input: &[Symbol
     radix.accumulate();
 
     debug!("SA compute input: {:?}", input);
-    debug!("radix offsets: {:?}", radix.freq.as_slice());
+    debug!("radix offsets: {:?}", &radix.freq[..]);
 
     for (i,&ch) in input.iter().enumerate() {
         let p = radix.place(ch);
@@ -142,18 +148,18 @@ pub fn compute_suffixes<SUF: NumCast + ToPrimitive + fmt::Debug>(input: &[Symbol
     // bring the original offsets back
     radix.shift();
 
-    for i in range(0, ALPHABET_SIZE)   {
+    for i in 0..ALPHABET_SIZE {
         let lo = radix.freq[i];
         let hi = radix.freq[i+1];
         if lo == hi {
-            continue
+            continue;
         }
-        let slice = suf_array.slice_mut(lo,hi);
+        let slice = &mut suf_array[lo..hi];
         debug!("\tsorting group [{}-{}) for symbol {}", lo, hi, i);
         slice.sort_by(|a,b| {
             iter::order::cmp(
-                input.slice_from(a.to_uint().unwrap()).iter(),
-                input.slice_from(b.to_uint().unwrap()).iter())
+                input[(a.to_usize().unwrap())..].iter(),
+                input[(b.to_usize().unwrap())..].iter())
         });
     }
 
@@ -187,12 +193,12 @@ impl<'a, SUF: ToPrimitive + 'a> Iterator for TransformIterator<'a, SUF> {
     type Item = Symbol;
     fn next(&mut self) -> Option<Symbol> {
         self.suf_iter.next().map(|(i,p)| {
-            if p.to_uint().unwrap() == 0 {
+            if p.to_usize().unwrap() == 0 {
                 assert!( self.origin.is_none() );
                 self.origin = Some(i);
                 *self.input.last().unwrap()
             }else {
-                self.input[p.to_uint().unwrap() - 1]
+                self.input[p.to_usize().unwrap() - 1]
             }
         })
     }
@@ -208,7 +214,7 @@ pub fn encode<'a, SUF: NumCast + ToPrimitive + fmt::Debug>(input: &'a [Symbol], 
 /// Returns the index of the original string in the output matrix.
 pub fn encode_simple(input: &[Symbol]) -> (Vec<Symbol>, usize) {
     let mut suf_array: Vec<usize> = repeat(0).take(input.len()).collect();
-    let mut iter = encode(input, suf_array.as_mut_slice());
+    let mut iter = encode(input, &mut suf_array[..]);
     let output: Vec<Symbol> = iter.by_ref().collect();
     (output, iter.get_origin())
 }
@@ -223,10 +229,10 @@ pub fn compute_inversion_table<SUF: NumCast + fmt::Debug>(input: &[Symbol], orig
     radix.accumulate();
 
     table[radix.place(input[origin])] = NumCast::from(0).unwrap();
-    for (i,&ch) in input.slice_to(origin).iter().enumerate() {
+    for (i,&ch) in input[..origin].iter().enumerate() {
         table[radix.place(ch)] = NumCast::from(i+1).unwrap();
     }
-    for (i,&ch) in input.slice_from(origin+1).iter().enumerate() {
+    for (i,&ch) in input[(origin+1)..].iter().enumerate() {
         table[radix.place(ch)] = NumCast::from(origin+2+i).unwrap();
     }
     //table[-1] = origin;
@@ -261,7 +267,7 @@ impl<'a, SUF: ToPrimitive> Iterator for InverseIterator<'a, SUF> {
         if self.current == -1 {
             None
         }else {
-            self.current = self.table[self.current].to_uint().unwrap() - 1;
+            self.current = self.table[self.current].to_usize().unwrap() - 1;
             debug!("\tjumped to {}", self.current);
             let p = if self.current!=-1 {
                 self.current
@@ -282,7 +288,7 @@ pub fn decode<'a, SUF: NumCast + fmt::Debug>(input: &'a [Symbol], origin: usize,
 /// A simplified BWT decode function, which allocates a temporary suffix array
 pub fn decode_simple(input: &[Symbol], origin: usize) -> Vec<Symbol> {
     let mut suf: Vec<usize> = repeat(0).take(input.len()).collect();
-    decode(input, origin, suf.as_mut_slice()).take(input.len()).collect()
+    decode(input, origin, &mut suf[..]).take(input.len()).collect()
 }
 
 /// Decode without additional memory, can be greatly optimized
@@ -298,10 +304,10 @@ fn decode_minimal(input: &[Symbol], origin: usize, output: &mut [Symbol]) {
     radix.accumulate();
 
     let n = input.len();
-    range(0,n).fold(origin, |i,j| {
+    (0..n).fold(origin, |i,j| {
         let ch = input[i];
         output[n-j-1] = ch;
-        let offset = input.slice_to(i).iter().filter(|&k| *k==ch).count();
+        let offset = &input[..i].iter().filter(|&k| *k==ch).count();
         radix.freq[ch as usize] + offset
     });
 }
@@ -326,7 +332,7 @@ pub struct Decoder<R> {
     extra_memory   : bool,
 }
 
-impl<R: Reader> Decoder<R> {
+impl<R: Read> Decoder<R> {
     /// Creates a new decoder which will read data from the given stream. The
     /// inner stream can be re-acquired by moving out of the `r` field of this
     /// structure.
@@ -351,42 +357,41 @@ impl<R: Reader> Decoder<R> {
         self.start = 0;
     }
 
-    fn read_header(&mut self) -> old_io::IoResult<()> {
-        match self.r.read_le_u32() {
+    fn read_header(&mut self) -> io::Result<()> {
+        match self.r.read_u32::<LittleEndian>() {
             Ok(size) => {
                 self.max_block_size = size as usize;
                 debug!("max size: {}", self.max_block_size);
                 Ok(())
             },
-            Err(e) => Err(e),
+            Err(e) => Err(byteorder_err_to_io(e)),
         }
     }
 
-    fn decode_block(&mut self) -> old_io::IoResult<bool> {
-        let n = match self.r.read_le_u32() {
+    fn decode_block(&mut self) -> io::Result<bool> {
+        let n = match self.r.read_u32::<LittleEndian>() {
+            Ok(0) => return Ok(false),
             Ok(n) => n as usize,
-            Err(ref e) if e.kind == old_io::EndOfFile => return Ok(false),
-            Err(e) => return Err(e),
+            Err(e) => return Err(byteorder_err_to_io(e))
         };
-        if n == 0 { return Ok(false) }
 
         self.temp.truncate(0);
         self.temp.reserve(n);
-        try!(self.r.push_at_least(n, n, &mut self.temp));
+        try!(self.r.push_exactly(n as u64, &mut self.temp));
 
-        let origin = try!(self.r.read_le_u32()) as usize;
+        let origin = try!(self.r.read_u32::<LittleEndian>()) as usize;
         self.output.truncate(0);
         self.output.reserve(n);
 
         if self.extra_memory    {
             self.table.truncate(0);
-            self.table.extend(range(0, n).map(|_| 0));
-            for ch in decode(self.temp.as_slice(), origin, self.table.as_mut_slice()) {
+            self.table.extend((0..n).map(|_| 0));
+            for ch in decode(&self.temp[..], origin, &mut self.table[..]) {
                 self.output.push(ch);
             }
         }else   {
-            self.output.extend(range(0, n).map(|_| 0));
-            decode_minimal(self.temp.as_slice(), origin, self.output.as_mut_slice());
+            self.output.extend((0..n).map(|_| 0));
+            decode_minimal(&self.temp[..], origin, &mut self.output[..]);
         }
 
         self.start = 0;
@@ -394,8 +399,8 @@ impl<R: Reader> Decoder<R> {
     }
 }
 
-impl<R: Reader> Reader for Decoder<R> {
-    fn read(&mut self, dst: &mut [u8]) -> old_io::IoResult<usize> {
+impl<R: Read> Read for Decoder<R> {
+    fn read(&mut self, dst: &mut [u8]) -> io::Result<usize> {
         if !self.header {
             try!(self.read_header());
             self.header = true;
@@ -412,18 +417,14 @@ impl<R: Reader> Reader for Decoder<R> {
             }
             let n = cmp::min(amt, self.output.len() - self.start);
             slice::bytes::copy_memory(
-                dst.slice_from_mut(dst_len - amt),
-                self.output.slice(self.start, self.start + n)
-                );
+                &self.output[self.start..(self.start + n)],
+                &mut dst[(dst_len - amt)..]
+            );
             self.start += n;
             amt -= n;
         }
 
-        if dst_len == amt {
-            Err(old_io::standard_error(old_io::EndOfFile))
-        } else {
-            Ok(dst_len - amt)
-        }
+        Ok(dst_len - amt)
     }
 }
 
@@ -438,7 +439,7 @@ pub struct Encoder<W> {
     block_size: usize,
 }
 
-impl<W: Writer> Encoder<W> {
+impl<W: Write> Encoder<W> {
     /// Creates a new encoder which will have its output written to the given
     /// output stream. The output stream can be re-acquired by calling
     /// `finish()`
@@ -454,21 +455,21 @@ impl<W: Writer> Encoder<W> {
         }
     }
 
-    fn encode_block(&mut self) -> old_io::IoResult<()> {
+    fn encode_block(&mut self) -> io::Result<()> {
         let n = self.buf.len();
-        try!(self.w.write_le_u32(n as u32));
+        try!(self.w.write_u32::<LittleEndian>(n as u32));
 
         self.suf.truncate(0);
-        self.suf.extend(range(0, n).map(|_| n));
+        self.suf.extend((0..n).map(|_| n));
         let w = &mut self.w;
 
         {
-            let mut iter = encode(self.buf.as_slice(), self.suf.as_mut_slice());
+            let mut iter = encode(&self.buf[..], &mut self.suf[..]);
             for ch in iter.by_ref() {
                 try!(w.write_u8(ch));
             }
 
-            try!(w.write_le_u32(iter.get_origin() as u32));
+            try!(w.write_u32::<LittleEndian>(iter.get_origin() as u32));
         }
         self.buf.truncate(0);
 
@@ -478,32 +479,32 @@ impl<W: Writer> Encoder<W> {
     /// This function is used to flag that this session of compression is done
     /// with. The stream is finished up (final bytes are written), and then the
     /// wrapped writer is returned.
-    pub fn finish(mut self) -> (W, old_io::IoResult<()>) {
+    pub fn finish(mut self) -> (W, io::Result<()>) {
         let result = self.flush();
         (self.w, result)
     }
 }
 
-impl<W: Writer> Writer for Encoder<W> {
-    fn write_all(&mut self, mut buf: &[u8]) -> old_io::IoResult<()> {
+impl<W: Write> Write for Encoder<W> {
+    fn write(&mut self, mut buf: &[u8]) -> io::Result<usize> {
         if !self.wrote_header {
-            try!(self.w.write_le_u32(self.block_size as u32));
+            try!(self.w.write_u32::<LittleEndian>(self.block_size as u32));
             self.wrote_header = true;
         }
 
         while buf.len() > 0 {
             let amt = cmp::min( self.block_size - self.buf.len(), buf.len() );
-            self.buf.push_all( buf.slice_to(amt) );
+            self.buf.push_all(&buf[..amt]);
 
             if self.buf.len() == self.block_size {
                 try!(self.encode_block());
             }
-            buf = buf.slice_from(amt);
+            buf = &buf[amt..];
         }
-        Ok(())
+        Ok(buf.len())
     }
 
-    fn flush(&mut self) -> old_io::IoResult<()> {
+    fn flush(&mut self) -> io::Result<()> {
         let ret = if self.buf.len() > 0 {
             self.encode_block()
         } else {
@@ -516,21 +517,22 @@ impl<W: Writer> Writer for Encoder<W> {
 
 #[cfg(test)]
 mod test {
-    use std::old_io::{BufReader, MemWriter};
+    use std::io::{BufReader, BufWriter, Read, Write};
     use std::iter::repeat;
     use test::Bencher;
     use super::{encode, decode, Decoder, Encoder};
 
     fn roundtrip(bytes: &[u8], extra_mem: bool) {
-        let mut e = Encoder::new(MemWriter::new(), 1<<10);
+        let mut e = Encoder::new(BufWriter::new(Vec::new()), 1<<10);
         e.write(bytes).unwrap();
         let (e, err) = e.finish();
         err.unwrap();
-        let encoded = e.into_inner();
+        let encoded = e.into_inner().unwrap();
 
-        let mut d = Decoder::new(BufReader::new(encoded.as_slice()), extra_mem);
-        let decoded = d.read_to_end().unwrap();
-        assert_eq!(decoded.as_slice(), bytes);
+        let mut d = Decoder::new(BufReader::new(&encoded[..]), extra_mem);
+        let mut decoded = Vec::new();
+        d.read_to_end(&mut decoded).unwrap();
+        assert_eq!(&decoded[..], bytes);
     }
 
     #[test]
@@ -551,12 +553,12 @@ mod test {
         let n = input.len();
         let mut suf: Vec<u16> = repeat(0).take(n).collect();
         let (output, origin) = {
-            let mut to_iter = encode(input, suf.as_mut_slice());
+            let mut to_iter = encode(input, &mut suf[..]);
             let out: Vec<u8> = to_iter.by_ref().collect();
             (out, to_iter.get_origin())
         };
         bh.iter(|| {
-            let from_iter = decode(output.as_slice(), origin, suf.as_mut_slice());
+            let from_iter = decode(&output[..], origin, &mut suf[..]);
             from_iter.last().unwrap();
         });
         bh.bytes = n as u64;

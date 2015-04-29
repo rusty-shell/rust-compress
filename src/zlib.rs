@@ -7,10 +7,11 @@
 //!
 //! ```rust
 //! use compress::zlib;
-//! use std::old_io::File;
+//! use std::fs::File;
 //!
 //! let stream = File::open(&Path::new("path/to/file.flate"));
-//! let decompressed = zlib::Decoder::new(stream).read_to_end();
+//! let mut decompressed = Vec::new();
+//! lib::Decoder::new(stream).read_to_end(&mut decompressed);
 //! ```
 //!
 //! # Related links
@@ -18,7 +19,8 @@
 //! * http://tools.ietf.org/html/rfc1950 - RFC that this implementation is based
 //!   on
 
-use std::old_io;
+use std::io::{self, Read};
+use super::byteorder::{BigEndian, ReadBytesExt};
 
 use Adler32;
 use flate;
@@ -31,7 +33,7 @@ pub struct Decoder<R> {
     read_header: bool,
 }
 
-impl<R: Reader> Decoder<R> {
+impl<R: Read> Decoder<R> {
     /// Creates a new ZLIB-stream decoder which will wrap the specified reader.
     /// This decoder also implements the `Reader` trait, and the underlying
     /// reader can be re-acquired through the `unwrap` method.
@@ -48,38 +50,35 @@ impl<R: Reader> Decoder<R> {
         self.inner.r
     }
 
-    fn validate_header(&mut self) -> old_io::IoResult<()> {
-        let cmf = try!(self.inner.r.read_byte());
-        let flg = try!(self.inner.r.read_byte());
+    fn validate_header(&mut self) -> io::Result<()> {
+        let cmf = try!(self.inner.r.read_u8());
+        let flg = try!(self.inner.r.read_u8());
         if cmf & 0xf != 0x8 {
-            return Err(old_io::IoError {
-                kind: old_io::InvalidInput,
-                desc: "unsupport zlib stream format",
-                detail: None,
-            })
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "unsupported zlib stream format"
+            ))
         }
+
         if cmf & 0xf0 != 0x70 {
-            return Err(old_io::IoError {
-                kind: old_io::InvalidInput,
-                desc: "unsupport zlib window size",
-                detail: None,
-            })
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "unsupported zlib window size"
+            ))
         }
 
         if flg & 0x20 != 0 {
-            return Err(old_io::IoError {
-                kind: old_io::InvalidInput,
-                desc: "unsupported initial dictionary in the output stream",
-                detail: None,
-            })
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "unsupported initial dictionary in the output stream"
+            ))
         }
 
         if ((cmf as u16) * 256 + (flg as u16)) % 31 != 0 {
-            return Err(old_io::IoError {
-                kind: old_io::InvalidInput,
-                desc: "invalid zlib header checksum",
-                detail: None,
-            })
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "invalid zlib header checksum"
+            ))
         }
         Ok(())
     }
@@ -95,29 +94,30 @@ impl<R: Reader> Decoder<R> {
     }
 }
 
-impl<R: Reader> Reader for Decoder<R> {
-    fn read(&mut self, buf: &mut [u8]) -> old_io::IoResult<usize> {
+impl<R: Read> Read for Decoder<R> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         if !self.read_header {
             try!(self.validate_header());
             self.read_header = true;
         } else if self.inner.eof() {
-            return Err(old_io::standard_error(old_io::EndOfFile));
+            return Ok(0);
         }
         match self.inner.read(buf) {
-            Ok(n) => {
-                self.hash.feed(buf.slice_to(n));
-                Ok(n)
-            }
-            Err(ref e) if e.kind == old_io::EndOfFile => {
-                let cksum = try!(self.inner.r.read_be_u32());
+            Ok(0) => {
+                let cksum = try!(self.inner.r.read_u32::<BigEndian>());
                 if cksum != self.hash.result() {
-                    return Err(old_io::IoError {
-                        kind: old_io::InvalidInput,
-                        desc: "invalid checksum on zlib stream",
-                        detail: None,
-                    })
+                    Err(io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        "invalid checksum on zlib stream"
+                    ))
                 }
-                return Err(e.clone())
+                else {
+                    Ok(0)
+                }
+            }
+            Ok(n) => {
+                self.hash.feed(&buf[..n]);
+                Ok(n)
             }
             Err(e) => Err(e)
         }
@@ -127,19 +127,22 @@ impl<R: Reader> Reader for Decoder<R> {
 #[cfg(test)]
 #[allow(warnings)]
 mod test {
-    use std::old_io::{BufReader, MemWriter};
-    use std::rand;
+    use std::io::{BufReader, BufWriter, Read, Write};
+    use super::super::rand::{random, Rand};
+    use super::super::byteorder::{LittleEndian, BigEndian, WriteBytesExt, ReadBytesExt};
     use std::str;
     use super::{Decoder};
     use test;
 
     fn test_decode(input: &[u8], output: &[u8]) {
         let mut d = Decoder::new(BufReader::new(input));
-        let got = match d.read_to_end() {
-            Ok(b) => b,
-            Err(e) => panic!("error reading: {}", e),
-        };
-        assert!(got.as_slice() == output);
+        let mut buf = Vec::new();
+
+        if let Err(e) = d.read_to_end(&mut buf) {
+            panic!("error reading: {}", e);
+        }
+
+        assert!(&buf[..] == output);
     }
 
     #[test]
@@ -166,34 +169,34 @@ mod test {
     #[test]
     fn one_byte_at_a_time() {
         let input = include_bytes!("data/test.z.1");
-        let mut d = Decoder::new(BufReader::new(input));
+        let mut d = Decoder::new(BufReader::new(&input[..]));
         assert!(!d.eof());
         let mut out = Vec::new();
         loop {
-            match d.read_byte() {
+            match d.read_u8() {
                 Ok(b) => out.push(b),
                 Err(..) => break
             }
         }
         assert!(d.eof());
-        assert!(out.as_slice() == include_bytes!("data/test.txt"));
+        assert!(&out[..] == &include_bytes!("data/test.txt")[..]);
     }
 
     #[test]
     fn random_byte_lengths() {
         let input = include_bytes!("data/test.z.1");
-        let mut d = Decoder::new(BufReader::new(input));
+        let mut d = Decoder::new(BufReader::new(&input[..]));
         let mut out = Vec::new();
         let mut buf = [0u8; 40];
         loop {
-            match d.read(buf.slice_to_mut(1 + rand::random::<usize>() % 40)) {
+            match d.read(&mut buf[..(1 + random::<usize>() % 40)]) {
                 Ok(n) => {
-                    out.push_all(buf.slice_to(n));
+                    out.push_all(&buf[..n]);
                 }
                 Err(..) => break
             }
         }
-        assert!(out.as_slice() == include_bytes!("data/test.txt"));
+        assert!(&out[..] == &include_bytes!("data/test.txt")[..]);
     }
 
     //fn roundtrip(bytes: &[u8]) {
@@ -203,7 +206,7 @@ mod test {
     //
     //    let mut d = Decoder::new(BufReader::new(encoded));
     //    let decoded = d.read_to_end();
-    //    assert_eq!(decoded.as_slice(), bytes);
+    //    assert_eq!(&decoded[..], bytes);
     //}
     //
     //#[test]
@@ -216,13 +219,13 @@ mod test {
     #[bench]
     fn decompress_speed(bh: &mut test::Bencher) {
         let input = include_bytes!("data/test.z.9");
-        let mut d = Decoder::new(BufReader::new(input));
+        let mut d = Decoder::new(BufReader::new(&input[..]));
         let mut output = [0u8; 65536];
         let mut output_size = 0;
         bh.iter(|| {
             d.inner.r = BufReader::new(input);
             d.reset();
-            output_size = d.read(&mut output).unwrap();
+            output_size = d.read(&mut output[..]).unwrap();
         });
         bh.bytes = output_size as u64;
     }
