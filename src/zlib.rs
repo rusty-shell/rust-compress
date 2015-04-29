@@ -5,7 +5,7 @@
 //!
 //! # Example
 //!
-//! ```rust, ignore
+//! ```rust,ignore
 //! use compress::zlib;
 //! use std::fs::File;
 //! use std::path::Path;

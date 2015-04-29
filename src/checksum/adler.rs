@@ -10,9 +10,8 @@ http://en.wikipedia.org/wiki/Adler-32.
 ```rust
 use compress::checksum::adler;
 let mut state = adler::State32::new();
-state.feed(bytes!("abracadabra"));
+state.feed(b"abracadabra");
 let checksum = state.result();
-
 ```
 
 */

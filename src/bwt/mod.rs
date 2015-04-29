@@ -24,20 +24,20 @@ EC (Entropy Coder): Huffman, Arithmetic, RC (Range Coder)
 # Example
 
 ```rust
-# #[allow(unused_must_use)];
-use std::io::{BufWriter, BufReader};
+use std::io::{BufWriter, BufReader, Read, Write};
 use compress::bwt;
 
 // Encode some text
 let text = "some text";
 let mut e = bwt::Encoder::new(BufWriter::new(Vec::new()), 4 << 20);
-e.write_str(text);
+e.write(text.as_bytes()).unwrap();
 let (encoded, _) = e.finish();
+let inner = encoded.into_inner().unwrap();
 
 // Decode the encoded text
-let mut d = bwt::Decoder::new(BufReader::new(encoded.unwrap()), true);
+let mut d = bwt::Decoder::new(BufReader::new(&inner[..]), true);
 let mut decoded = Vec::new();
-let result = d.read_to_end(&mut decoded).unwrap();
+d.read_to_end(&mut decoded).unwrap();
 
 assert_eq!(&decoded[..], text.as_bytes());
 ```
@@ -57,7 +57,7 @@ use std::iter::{self, Extend, repeat};
 use std::io::{self, Read, Write};
 use self::num::traits::{NumCast, ToPrimitive};
 
-use super::byteorder::{LittleEndian, WriteBytesExt, ReadBytesExt};
+use super::byteorder::{self, LittleEndian, WriteBytesExt, ReadBytesExt};
 use super::{byteorder_err_to_io, ReadExact};
 
 pub mod dc;
@@ -263,19 +263,22 @@ impl<'a, SUF> InverseIterator<'a, SUF> {
 
 impl<'a, SUF: ToPrimitive> Iterator for InverseIterator<'a, SUF> {
     type Item = Symbol;
+
     fn next(&mut self) -> Option<Symbol> {
-        if self.current == -1 {
+        if self.current == usize::max_value() {
             None
-        }else {
-            self.current = self.table[self.current].to_usize().unwrap() - 1;
+        } else {
+            self.current = self.table[self.current].to_usize().unwrap().wrapping_sub(1);
             debug!("\tjumped to {}", self.current);
-            let p = if self.current!=-1 {
+
+            let p = if self.current != usize::max_value() {
                 self.current
-            }else {
+            } else {
                 self.origin
             };
+
             Some(self.input[p])
-        }
+        }   
     }
 }
 
@@ -370,9 +373,9 @@ impl<R: Read> Decoder<R> {
 
     fn decode_block(&mut self) -> io::Result<bool> {
         let n = match self.r.read_u32::<LittleEndian>() {
-            Ok(0) => return Ok(false),
             Ok(n) => n as usize,
-            Err(e) => return Err(byteorder_err_to_io(e))
+            Err(byteorder::Error::Io(e)) => return Err(e),
+            Err(..) => return Ok(false) // EOF
         };
 
         self.temp.truncate(0);

@@ -1,8 +1,8 @@
-use std::io::{BufReader, BufWriter, Write, Read};
+use std::io::{BufReader, BufWriter, Write, Read, Seek, SeekFrom, Cursor};
 use std::vec::Vec;
+use test::Bencher;
 
 static TEXT_INPUT: &'static [u8] = include_bytes!("../../data/test.txt");
-
 
 fn roundtrip(bytes: &[u8]) {
     info!("Roundtrip Ari of size {}", bytes.len());
@@ -210,14 +210,15 @@ fn roundtrips_apm() {
     roundtrip_apm(b"abracadabra");
 }
 
-// #[bench]
-// fn compress_speed(bh: &mut Bencher) {
-//     let mut storage: Vec<u8> = repeat(0u8).take(TEXT_INPUT.len()).collect();
-//     bh.iter(|| {
-//         let mut w = BufWriter::new(&mut storage[..]);
-//         w.seek(0, SeekSet).unwrap();
-//         let mut e = super::ByteEncoder::new(w);
-//         e.write(TEXT_INPUT).unwrap();
-//     });
-//     bh.bytes = TEXT_INPUT.len() as u64;
-// }
+#[bench]
+fn compress_speed(bh: &mut Bencher) {
+    let mut storage: Vec<u8> = vec![0u8; TEXT_INPUT.len()];
+    bh.iter(|| {
+        let cursor = Cursor::new(&mut storage[..]);
+        let mut w = BufWriter::new(cursor);
+        w.seek(SeekFrom::Start(0)).unwrap();
+        let mut e = super::ByteEncoder::new(w);
+        e.write(TEXT_INPUT).unwrap();
+    });
+    bh.bytes = TEXT_INPUT.len() as u64;
+}

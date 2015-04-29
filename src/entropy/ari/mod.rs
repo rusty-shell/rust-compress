@@ -10,19 +10,21 @@ http://en.wikipedia.org/wiki/Range_encoding
 
 # Example
 ```rust
-# #[allow(unused_must_use)];
-use std::io::{BufWriter, BufReader};
+# #![allow(unused_must_use)]
+use std::io::{BufWriter, BufReader, Read, Write};
 use compress::entropy::ari;
 
 // Encode some text
 let text = "some text";
-let mut e = ari::ByteEncoder::new(MemWriter::new());
-e.write_str(text);
+let mut e = ari::ByteEncoder::new(BufWriter::new(Vec::new()));
+e.write_all(text.as_bytes()).unwrap();
 let (encoded, _) = e.finish();
+let inner = encoded.into_inner().unwrap();
 
 // Decode the encoded text
-let mut d = ari::ByteDecoder::new(MemReader::new(encoded.unwrap()));
-let decoded = d.read_to_end().unwrap();
+let mut d = ari::ByteDecoder::new(BufReader::new(&inner[..]));
+let mut decoded = Vec::new();
+d.read_to_end(&mut decoded).unwrap();
 ```
 # Credit
 

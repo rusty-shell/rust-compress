@@ -11,17 +11,17 @@ http://en.wikipedia.org/wiki/Move-to-front_transform
 # Example
 
 ```rust
-use std::io;
+use std::io::{self, Read, Write};
 use compress::bwt::mtf;
 
 // Encode a stream of bytes
 let bytes = b"abracadabra";
-let mut e = mtf::Encoder::new(io::BufWriter::new());
-e.write(bytes).unwrap();
-let encoded = e.finish().unwrap();
+let mut e = mtf::Encoder::new(io::BufWriter::new(Vec::new()));
+e.write_all(bytes).unwrap();
+let encoded = e.finish().into_inner().unwrap();
 
 // Decode a stream of ranks
-let mut d = mtf::Decoder::new(io::BufReader::new(&encoded));
+let mut d = mtf::Decoder::new(io::BufReader::new(&encoded[..]));
 let mut decoded = Vec::new();
 let result = d.read_to_end(&mut decoded).unwrap();
 ```
@@ -33,8 +33,7 @@ let result = d.read_to_end(&mut decoded).unwrap();
 use std::{iter, mem};
 use std::io::{self, Read, Write};
 
-use super::super::byteorder::{WriteBytesExt, ReadBytesExt};
-use super::super::byteorder_err_to_io;
+use super::super::byteorder::{self, WriteBytesExt, ReadBytesExt};
 
 pub type Symbol = u8;
 pub type Rank = u8;
@@ -158,9 +157,9 @@ impl<R: Read> Read for Decoder<R> {
         let mut bytes_read = 0;
         for sym in dst.iter_mut() {
             let rank = match self.r.read_u8() {
-                Ok(0) => break,
                 Ok(r) => r,
-                Err(e) => return Err(byteorder_err_to_io(e))
+                Err(byteorder::Error::UnexpectedEOF) => break,
+                Err(byteorder::Error::Io(e)) => return Err(e)
             };
             bytes_read += 1;
             *sym = self.mtf.decode(rank);
@@ -180,7 +179,7 @@ mod test {
         info!("Roundtrip MTF of size {}", bytes.len());
         let buf = Vec::new();
         let mut e = Encoder::new(io::BufWriter::new(buf));
-        e.write(bytes).unwrap();
+        e.write_all(bytes).unwrap();
         let encoded = e.finish().into_inner().unwrap();
         debug!("Roundtrip MTF input: {:?}, ranks: {:?}", bytes, encoded);
         let mut d = Decoder::new(io::BufReader::new(&encoded[..]));
@@ -203,7 +202,7 @@ mod test {
         let mem = io::BufWriter::with_capacity(input.len(), vec);
         let mut e = Encoder::new(mem);
         bh.iter(|| {
-            e.write(input).unwrap();
+            e.write_all(input).unwrap();
         });
         bh.bytes = input.len() as u64;
     }
@@ -213,7 +212,7 @@ mod test {
         let vec = Vec::new();
         let input = include_bytes!("../data/test.txt");
         let mut e = Encoder::new(io::BufWriter::new(vec));
-        e.write(input).unwrap();
+        e.write_all(input).unwrap();
         let encoded = e.finish().into_inner().unwrap();
         bh.iter(|| {
             let mut d = Decoder::new(io::BufReader::new(&encoded[..]));

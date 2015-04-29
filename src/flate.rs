@@ -5,7 +5,7 @@
 //!
 //! # Example
 //!
-//! ```rust, ignore
+//! ```rust,ignore
 //! use compress::flate;
 //! use std::fs::File;
 //! use std::path::Path;
@@ -221,7 +221,7 @@ impl<R: Read> Decoder<R> {
         }
         self.outpos += n;
         if n < amt {
-            slice::bytes::copy_memory(&self.block[from..(from + n)],
+            slice::bytes::copy_memory(&self.block[(from + n)..],
                                       &mut self.output[..]);
             self.outpos = amt - n;
         }
@@ -465,8 +465,8 @@ impl<R: Read> Read for Decoder<R> {
             try!(self.block());
         }
         let n = cmp::min(buf.len(), self.block.len() - self.pos);
-        slice::bytes::copy_memory(&buf[..n],
-                                  &mut self.block[self.pos..(self.pos + n)]);
+        slice::bytes::copy_memory(&self.block[self.pos..(self.pos + n)],
+                                  &mut buf[..n]);
         self.pos += n;
         Ok(n)
     }
@@ -532,18 +532,8 @@ mod test {
             }
         }
 
-        let expected = include_bytes!("data/test.txt");
-
         assert!(d.eof());
-        assert_eq!(expected.len(), out.len());
-
-        for (i, (a, b)) in out.iter().zip(expected.iter()).enumerate() {
-            if a != b {
-                panic!("{} != {} at index {}", a, b, i);
-            }
-        }
-
-        assert!(&out[..] == &expected[..]);
+        assert!(&out[..] == &include_bytes!("data/test.txt")[..]);
     }
 
     #[test]

@@ -244,7 +244,7 @@ pub fn decode_simple<D: ToPrimitive>(n: usize, distances: &[D]) -> Vec<Symbol> {
         di += 1;
         if di > distances.len() {
             Err(io::Error::new(io::ErrorKind::Other, "Unexpected end of file"))
-        }else {
+        } else {
             Ok(distances[di-1].to_usize().unwrap())
         }
     }).unwrap();
