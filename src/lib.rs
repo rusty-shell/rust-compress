@@ -2,6 +2,7 @@
 #![deny(missing_docs)]
 #![allow(missing_copy_implementations)]
 #![feature(negate_unsigned, convert, core, collections)]
+#![cfg_attr(test, feature(test))]
 
 //! dox (placeholder)
 

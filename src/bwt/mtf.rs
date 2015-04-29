@@ -178,11 +178,12 @@ mod test {
 
     fn roundtrip(bytes: &[u8]) {
         info!("Roundtrip MTF of size {}", bytes.len());
-        let mut e = Encoder::new(io::BufWriter::new());
+        let buf = Vec::new();
+        let mut e = Encoder::new(io::BufWriter::new(buf));
         e.write(bytes).unwrap();
         let encoded = e.finish().into_inner().unwrap();
         debug!("Roundtrip MTF input: {:?}, ranks: {:?}", bytes, encoded);
-        let mut d = Decoder::new(io::BufReader::new(&encoded));
+        let mut d = Decoder::new(io::BufReader::new(&encoded[..]));
         let mut decoded = Vec::new();
         d.read_to_end(&mut decoded).unwrap();
         assert_eq!(&decoded[..], bytes);
@@ -215,7 +216,7 @@ mod test {
         e.write(input).unwrap();
         let encoded = e.finish().into_inner().unwrap();
         bh.iter(|| {
-            let mut d = Decoder::new(io::BufReader::new(&encoded));
+            let mut d = Decoder::new(io::BufReader::new(&encoded[..]));
             let mut buf = Vec::new();
             d.read_to_end(&mut buf).unwrap();
         });

@@ -1,7 +1,5 @@
 use std::io::{BufReader, BufWriter, Write, Read};
-use std::iter::repeat;
 use std::vec::Vec;
-use test::Bencher;
 
 static TEXT_INPUT: &'static [u8] = include_bytes!("../../data/test.txt");
 

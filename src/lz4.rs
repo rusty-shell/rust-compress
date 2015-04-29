@@ -8,13 +8,15 @@ interfaces wrapping an underlying stream.
 
 # Example
 
-```rust
+```rust,ignore
 use compress::lz4;
 use std::fs::File;
+use std::path::Path;
+use std::io::Read;
 
-let stream = File::open(&Path::new("path/to/file.lz4"));
+let stream = File::open(&Path::new("path/to/file.lz4")).unwrap();
 let mut decompressed = Vec::new();
-let result = lz4::Decoder::new(stream).read_to_end(&mut decompressed);
+lz4::Decoder::new(stream).read_to_end(&mut decompressed);
 ```
 
 # Credit
@@ -29,6 +31,8 @@ use std::io::{self, Read, Write};
 use std::iter::repeat;
 use std::slice;
 use std::vec::Vec;
+use std::num::Wrapping;
+use std::ops::Shr;
 
 use super::byteorder::{LittleEndian, WriteBytesExt, ReadBytesExt};
 use super::{ReadExact, byteorder_err_to_io};
@@ -231,12 +235,11 @@ impl<'a> BlockEncoder<'a> {
                     }
 
                     let seq = self.seq_at(self.pos);
+                    let hash = (Wrapping(seq) * Wrapping(2654435761)).shr(HASH_SHIFT as usize).0;
+                    let mut r = (Wrapping(self.hash_table[hash as usize]) + Wrapping(UNINITHASH)).0;
+                    self.hash_table[hash as usize] = (Wrapping(self.pos) - Wrapping(UNINITHASH)).0;
 
-                    let hash = (seq * 2654435761) >> (HASH_SHIFT as usize);
-                    let mut r = self.hash_table[hash as usize] + UNINITHASH;
-                    self.hash_table[hash as usize] = self.pos - UNINITHASH;
-
-                    if ((self.pos - r) >> 16) != 0 || seq != self.seq_at(r) {
+                    if (Wrapping(self.pos) - Wrapping(r)).shr(16).0 != 0 || seq != self.seq_at(r) {
                         if self.pos - self.anchor > limit {
                             limit = limit << 1;
                             step += 1 + (step >> 2);
@@ -610,11 +613,11 @@ pub fn encode_block(input: &[u8], output: &mut Vec<u8>) -> usize {
 #[cfg(test)]
 mod test {
     use std::io::{BufReader, BufWriter, Read, Write};
-    use super::super::rand::{self, Rand};
+    use super::super::rand;
     use super::{Decoder, Encoder};
     use test;
 
-    use super::super::byteorder::{LittleEndian, BigEndian, WriteBytesExt, ReadBytesExt};
+    use super::super::byteorder::ReadBytesExt;
 
     fn test_decode(input: &[u8], output: &[u8]) {
         let mut d = Decoder::new(BufReader::new(input));
@@ -675,10 +678,10 @@ mod test {
         let mut buf = [0u8; 40];
         loop {
             match d.read(&mut buf[..(1 + rand::random::<usize>() % 40)]) {
-                Ok(n) if n > 0 => {
+                Ok(0) => break,
+                Ok(n) => {
                     out.push_all(&buf[..n]);
                 }
-                Ok(0) => break,
                 Err(..) => break
             }
         }

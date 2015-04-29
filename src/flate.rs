@@ -5,12 +5,14 @@
 //!
 //! # Example
 //!
-//! ```rust
+//! ```rust, ignore
 //! use compress::flate;
 //! use std::fs::File;
+//! use std::path::Path;
 //!
-//! let stream = File::open(&Path::new("path/to/file.flate"));
-//! let decompressed = flate::Decoder::new(stream).read_to_end();
+//! let stream = File::open(&Path::new("path/to/file.flate")).unwrap();
+//! let mut decompressed = Vec::new();
+//! flate::Decoder::new(stream).read_to_end(&mut decompressed);
 //! ```
 //!
 //! # Related links
@@ -491,6 +493,8 @@ mod test {
         let mut d = Decoder::new(BufReader::new(fixup(input)));
         let mut buf = Vec::new();
         d.read_to_end(&mut buf).unwrap();
+
+        assert_eq!(output.len(), buf.len());
         assert!(&buf[..] == output);
     }
 
@@ -527,8 +531,19 @@ mod test {
                 Err(..) => break
             }
         }
+
+        let expected = include_bytes!("data/test.txt");
+
         assert!(d.eof());
-        assert!(&out[..] == &include_bytes!("data/test.txt")[..]);
+        assert_eq!(expected.len(), out.len());
+
+        for (i, (a, b)) in out.iter().zip(expected.iter()).enumerate() {
+            if a != b {
+                panic!("{} != {} at index {}", a, b, i);
+            }
+        }
+
+        assert!(&out[..] == &expected[..]);
     }
 
     #[test]
@@ -539,10 +554,10 @@ mod test {
         let mut buf = [0u8; 40];
         loop {
             match d.read(&mut buf[..(1 + random::<usize>() % 40)]) {
+                Err(..) | Ok(0) => break,
                 Ok(n) => {
                     out.push_all(&buf[..n]);
                 }
-                Err(..) => break
             }
         }
         assert!(&out[..] == &include_bytes!("data/test.txt")[..]);

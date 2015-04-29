@@ -5,11 +5,12 @@
 //!
 //! # Example
 //!
-//! ```rust
+//! ```rust, ignore
 //! use compress::zlib;
 //! use std::fs::File;
+//! use std::path::Path;
 //!
-//! let stream = File::open(&Path::new("path/to/file.flate"));
+//! let stream = File::open(&Path::new("path/to/file.flate")).unwrap();
 //! let mut decompressed = Vec::new();
 //! lib::Decoder::new(stream).read_to_end(&mut decompressed);
 //! ```
@@ -190,10 +191,10 @@ mod test {
         let mut buf = [0u8; 40];
         loop {
             match d.read(&mut buf[..(1 + random::<usize>() % 40)]) {
+                Ok(0) | Err(..) => break,
                 Ok(n) => {
                     out.push_all(&buf[..n]);
                 }
-                Err(..) => break
             }
         }
         assert!(&out[..] == &include_bytes!("data/test.txt")[..]);
