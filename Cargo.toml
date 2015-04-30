@@ -7,13 +7,14 @@ authors = ["Alex Crichton <alex@alexcrichton.com>",
 license = "MIT/Apache-2.0"
 
 [features]
-default = ["bwt", "checksum", "entropy", "flate", "lz4", "zlib"]
+default = ["bwt", "checksum", "entropy", "flate", "lz4", "zlib", "rle"]
 bwt = []
 checksum = []
 entropy = []
 flate = []
 lz4 = []
 zlib = []
+rle = []
 
 [[bin]]
 name = "compress"
