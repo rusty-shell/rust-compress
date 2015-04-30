@@ -32,7 +32,7 @@ assert_eq!(&input[..], &decoder_buf[..]);
 
 !*/
 
-use std::io::{self, Write, Read, BufReader, Bytes};
+use std::io::{self, Write, Read, Bytes};
 
 /// This structure is used to compress a stream of bytes using a RLE
 /// compression algorithm. This is a wrapper around an internal writer which
@@ -359,5 +359,44 @@ mod test {
             rng.fill_bytes(&mut buf[..]);
             test_roundtrip(&buf);
         }
+    }
+
+    // initial speed: 145 MB/s
+    // after moving check to write: 145 MB/s
+
+    #[bench]
+    fn compress_speed(bh: &mut test::Bencher) {
+        let input = include_bytes!("data/test.txt");
+        bh.bytes = input.len() as u64;
+        let output_size = Encoder::new(Vec::new()).write(&input[..]).unwrap();
+        let mut buf = Vec::with_capacity(output_size);
+
+        bh.iter(|| {
+            let mut encoder = Encoder::new(&mut buf[..]);
+            encoder.write(&input[..]).unwrap();
+        });
+    }
+
+    // initial speed: 91 MB/s
+    // after using a BufReader instead of VecDeque: 20 MB/s
+    // after using a byte iterator on a BufReader: 20 MB/s
+    // after using a byte iterator on the raw read object: 80 MB/s
+
+    #[bench]
+    fn decompress_speed(bh: &mut test::Bencher) {
+        let input = include_bytes!("data/test.txt");
+        let mut encoder = Encoder::new(Vec::new());
+        encoder.write_all(&input[..]).unwrap();
+        let (buf, _): (Vec<u8>, _) = encoder.finish();
+
+        let mut output = [0u8; 65536];
+        let mut output_size = 0;
+
+        bh.iter(|| {
+            let mut decoder = Decoder::new(& buf[..]);
+            output_size = decoder.read(&mut output[..]).unwrap();
+        });
+
+        bh.bytes = output_size as u64;
     }
 }
