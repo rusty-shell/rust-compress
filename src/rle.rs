@@ -1,17 +1,38 @@
-//! Run time length encoding and decoding based on byte streams.
-//!
-//! A run is defined as a sequence of identical bytes of length two or greater. 
-//! A run of byte a and length n is encoded by a two repitions of a, followed 
-//! by a length specification which describes how much often these bytes are 
-//! repeated. Such a specification is a string of bytes
-//! with dynamic length. The most significat bit of each byte in this string 
-//! indicates if the byte is the last byte in the string. The rest of the bits
-//! are concatenated using the Little Endian convention.
-//!
-//! Every byte string is a prefix of a valid RLE encoding!
+/*! 
+
+Run time length encoding and decoding based on byte streams, see 
+https://en.wikipedia.org/wiki/Run-length_encoding.
+
+A run is defined as a sequence of identical bytes of length two or greater. 
+A run of byte a and length n is encoded by a two repitions of a, followed 
+by a length specification which describes how much often these bytes are 
+repeated. Such a specification is a string of bytes with dynamic length.
+The most significat bit of each byte in this string indicates if the byte is
+the last byte in the string. The rest of the bits are concatenated using 
+the Little Endian convention.
+
+# Example
+
+```rust
+use compress::rle;
+use std::io::{Write, Read};
+
+let input = b"Helloooo world!!";
+
+let mut encoder = rle::Encoder::new(Vec::new());
+encoder.write_all(&input[..]).unwrap();
+let (buf, _): (Vec<u8>, _) = encoder.finish();
+
+let mut decoder = rle::Decoder::new(&buf[..]);
+let mut decoder_buf = Vec::new();
+decoder.read_to_end(&mut decoder_buf).unwrap();
+
+assert_eq!(&input[..], &decoder_buf[..]);
+```
+
+!*/
 
 use std::io::{self, Write, Read};
-use std::iter::repeat;
 use std::collections::VecDeque;
 
 /// This structure is used to compress a stream of bytes using a RLE
@@ -40,11 +61,13 @@ impl<W: Write> Encoder<W> {
     /// with. The stream is finished up (final bytes are written), and then the
     /// wrapped writer is returned.
     pub fn finish(mut self) -> (W, io::Result<()>) {
-        (self.w, self.flush())
+        let result = self.flush();
+
+        (self.w, result)
     }
 
     fn process_byte(&mut self, byte: u8) -> io::Result<()> {
-        // TODO: move this check to write, so it won't be called as often?
+        // TODO: move this check to self.write(), so it won't be called as often?
         if ! self.in_run {
             self.byte = byte;
             self.reps = 1;
@@ -58,7 +81,7 @@ impl<W: Write> Encoder<W> {
         }
 
         if self.byte != byte {
-            self.flush();
+            try!(self.flush());
             self.reps = 1;
             self.byte = byte;
         }
@@ -68,7 +91,7 @@ impl<W: Write> Encoder<W> {
 }
 
 impl<W: Write> Write for Encoder<W> {
-    fn write(&mut self, mut buf: &[u8]) -> io::Result<usize> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         let mut bytes_written = 0;
 
         for byte in buf {
@@ -116,15 +139,36 @@ struct RunBuilder {
 }
 
 impl RunBuilder {
-    fn new(byte: u8) -> Run {
-        Run {
-            byte: u8,
+    fn new(byte: u8) -> RunBuilder {
+        RunBuilder {
+            byte: byte,
             slice: [0; 9],
             byte_count: 0
         }
     }
-}
 
+    fn to_run(&mut self) -> Run {
+        let reps = 2 + self.slice.iter().enumerate().fold(0u64, |reps, (i, &byte)| {
+            reps | (((byte & 0b0111_1111) as u64) << (i as u32 * 7))
+        });
+
+        Run {
+            byte: self.byte,
+            reps: reps
+        }
+    }
+
+    fn add_byte(&mut self, byte: u8) -> io::Result<()> {
+        if self.byte_count >= 9 {
+            Err(io::Error::new(io::ErrorKind::Other, "Overly long run"))
+        } else {
+            self.slice[self.byte_count as usize] = byte;
+            self.byte_count += 1;
+            Ok(())
+        }
+    }
+}
+ 
 struct Run {
     byte: u8,
     reps: u64
@@ -136,6 +180,9 @@ enum DecoderState {
     Run(RunBuilder)
 }
 
+/// This structure is used to decode a run length encoded stream. This wraps
+/// an internal reader which is read from when this decoder's read method is
+/// called.
 pub struct Decoder<R> {
     r: R,
     buf: VecDeque<u8>,
@@ -144,16 +191,21 @@ pub struct Decoder<R> {
 }
 
 impl<R: Read> Decoder<R> {
+    /// Creates a new decoder which will read data from the given stream. The
+    /// inner stream can be re-acquired by moving out of the `r` field of this
+    /// structure.
     pub fn new(r: R) -> Decoder<R> {
         Decoder {
             r: r,
-            state: DecoderState::Clean
+            buf: VecDeque::with_capacity(32),
+            state: DecoderState::Clean,
+            run: None
         }
     }
 
     fn read_byte(&mut self) -> io::Result<Option<u8>> {
         if let None = self.run {
-            self.run = try!(self.read_run());
+            try!(self.read_run());
         }
 
         if let Some(Run { byte: b, reps: r }) = self.run {
@@ -169,15 +221,63 @@ impl<R: Read> Decoder<R> {
         Ok(None)
     }
 
-    fn read_run(&mut self) -> io::Result<Run> {
-        // TODO: diz b wher da magik happen
+    fn read_run(&mut self) -> io::Result<()> {
+        // FIXME: this solution suuuxx
+        let mut reset = false;
+
+        while let Some(byte) = try!(self.fetch_byte()) {
+            match self.state {
+                DecoderState::Clean => {
+                    self.state = DecoderState::Single(byte);
+                },
+                DecoderState::Single(current) => {
+                    if byte == current {
+                        self.state = DecoderState::Run(RunBuilder::new(byte));
+                    } else {
+                        self.run = Some(Run { byte: current, reps: 1 });
+                        self.state = DecoderState::Single(byte);
+                        break;
+                    }
+                },
+                DecoderState::Run(ref mut run_builder) => {
+                    try!(run_builder.add_byte(byte));
+
+                    if Self::is_final_run_byte(byte) {
+                        self.run = Some(run_builder.to_run());
+                        reset = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if reset {
+            self.state = DecoderState::Clean;
+        }
+
+        // internal read object exhausted -- flush remaining state into run
+        if let None = self.run {
+            self.run = match self.state {
+                DecoderState::Clean => None,
+                DecoderState::Single(byte) => Some(Run { byte: byte, reps: 1 }),
+                DecoderState::Run(ref mut run_builder) => Some(run_builder.to_run())
+            };
+
+            self.state = DecoderState::Clean;
+        }
+
+        Ok(())
     }
 
-    fn fill_buff(&mut self) -> io::Result<()> {
-        let mut buf = [0u8; 256];
-        try!(self.r.read(&mut buf));
+    fn is_final_run_byte(byte: u8) -> bool {
+        0b1000_0000 & byte != 0
+    }
 
-        for &byte in buf {
+    fn fill_buf(&mut self) -> io::Result<()> {
+        let mut buf = [0u8; 32];
+        let bytes_read = try!(self.r.read(&mut buf));
+
+        for &byte in &buf[..bytes_read] {
             self.buf.push_back(byte);
         }
 
@@ -192,7 +292,7 @@ impl<R: Read> Decoder<R> {
 
                 match self.buf.pop_front() {
                     None => Ok(None),
-                    Ok(byte) => Ok(Some(byte))
+                    Some(byte) => Ok(Some(byte))
                 }
             }
         }
@@ -218,8 +318,9 @@ impl<R: Read> Read for Decoder<R> {
 
 #[cfg(test)]
 mod test {
-    use super::Encoder;
-    use std::io::Write;
+    use super::{Decoder, Encoder};
+    use super::super::rand::{OsRng, Rng};
+    use std::io::{Write, Read};
     use std::iter::{Iterator, repeat};
 
     fn test_encode(input: &[u8], output: &[u8]) {
@@ -227,7 +328,27 @@ mod test {
         encoder.write_all(input).unwrap();
         let (buf, _) = encoder.finish();
 
-        assert_eq!(&buf[..], output);
+        assert_eq!(output, &buf[..]);
+    }
+
+    fn test_decode(input: &[u8], output: &[u8]) {
+        let mut decoder = Decoder::new(input);
+        let mut buf = Vec::new();
+        decoder.read_to_end(&mut buf).unwrap();
+
+        assert_eq!(output, &buf[..]);
+    }
+
+    fn test_roundtrip(input: &[u8]) {
+        let mut encoder = Encoder::new(Vec::new());
+        encoder.write_all(input).unwrap();
+        let (buf, _) = encoder.finish();
+
+        let mut decoder = Decoder::new(&buf[..]);
+        let mut decoder_buf = Vec::new();
+        decoder.read_to_end(&mut decoder_buf).unwrap();
+
+        assert_eq!(input, &decoder_buf[..]);
     }
 
     #[test]
@@ -240,11 +361,38 @@ mod test {
     }
 
     #[test]
-    fn long_runs() {
+    fn long_run_encoding() {
         let mut data = repeat(5).take(129).collect::<Vec<_>>();
         test_encode(&data[..], &[5, 5, 255]);
 
-        let mut data = [1, 3, 4, 4].iter().map(|&x| x).chain(repeat(100).take(2 + 52 + 128)).collect::<Vec<_>>();
+        data = [1, 3, 4, 4].iter().map(|&x| x).chain(repeat(100).take(2 + 52 + 128)).collect::<Vec<_>>();
         test_encode(&data[..], &[1, 3, 4, 4, 0 + 128, 100, 100, 52, 1 + 128]);
+    }
+
+    #[test]
+    fn simple_decoding() {
+        test_decode(b"", b"");
+        test_decode(b"a", b"a");
+        test_decode(b"abca123", b"abca123");
+        test_decode(&[20, 20, 5 - 2 + 128, 15], &[20, 20, 20, 20, 20, 15]);
+        test_decode(&[0, 0, 2 - 2 + 128], &[0, 0]);
+    }
+
+    #[test]
+    fn long_run_decoding() {
+        let data = [1, 3, 4, 4].iter().map(|&x| x).chain(repeat(100).take(2 + 52 + 128)).collect::<Vec<_>>();
+
+        test_decode(&[1, 3, 4, 4, 0 + 128, 100, 100, 52, 1 + 128], &data[..]);
+    }
+
+    #[test]
+    fn random_roundtrips() {
+        let mut rng = OsRng::new().unwrap();
+
+        for _ in 0..100 {
+            let mut buf = [0; 13579];
+            rng.fill_bytes(&mut buf[..]);
+            test_roundtrip(&buf);
+        }
     }
 }
