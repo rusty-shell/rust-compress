@@ -32,8 +32,7 @@ assert_eq!(&input[..], &decoder_buf[..]);
 
 !*/
 
-use std::io::{self, Write, Read};
-use std::collections::VecDeque;
+use std::io::{self, Write, Read, BufReader, Bytes};
 
 /// This structure is used to compress a stream of bytes using a RLE
 /// compression algorithm. This is a wrapper around an internal writer which
@@ -67,20 +66,9 @@ impl<W: Write> Encoder<W> {
     }
 
     fn process_byte(&mut self, byte: u8) -> io::Result<()> {
-        // TODO: move this check to self.write(), so it won't be called as often?
-        if ! self.in_run {
-            self.byte = byte;
-            self.reps = 1;
-            self.in_run = true;
-            return Ok(());
-        }
-
         if self.byte == byte {
             self.reps += 1;
-            return Ok(())
-        }
-
-        if self.byte != byte {
+        } else if self.byte != byte {
             try!(self.flush());
             self.reps = 1;
             self.byte = byte;
@@ -92,14 +80,17 @@ impl<W: Write> Encoder<W> {
 
 impl<W: Write> Write for Encoder<W> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        let mut bytes_written = 0;
-
-        for byte in buf {
-            try!(self.process_byte(*byte));
-            bytes_written += 1;
+        if ! self.in_run && buf.len() > 0 {
+            self.byte = buf[0];
+            self.reps = 1;
+            self.in_run = true;
         }
 
-        Ok(bytes_written)
+        for byte in &buf[1..] {
+            try!(self.process_byte(*byte));
+        }
+
+        Ok(buf.len())
     }
 
     fn flush(&mut self) -> io::Result<()> {
@@ -108,10 +99,9 @@ impl<W: Write> Write for Encoder<W> {
         } else if self.reps > 1 {
             let mut buf = [0; 11];
             let mut reps_encode = self.reps - 2;
+            let mut index = 2;
             buf[0] = self.byte;
             buf[1] = self.byte;
-
-            let mut index = 2;
 
             loop {
                 buf[index] = (reps_encode & 0b0111_1111) as u8;
@@ -184,8 +174,7 @@ enum DecoderState {
 /// an internal reader which is read from when this decoder's read method is
 /// called.
 pub struct Decoder<R> {
-    r: R,
-    buf: VecDeque<u8>,
+    buf: Bytes<R>,
     state: DecoderState,
     run: Option<Run>
 }
@@ -196,8 +185,7 @@ impl<R: Read> Decoder<R> {
     /// structure.
     pub fn new(r: R) -> Decoder<R> {
         Decoder {
-            r: r,
-            buf: VecDeque::with_capacity(32),
+            buf: r.bytes(),
             state: DecoderState::Clean,
             run: None
         }
@@ -222,10 +210,11 @@ impl<R: Read> Decoder<R> {
     }
 
     fn read_run(&mut self) -> io::Result<()> {
-        // FIXME: this solution suuuxx
         let mut reset = false;
 
-        while let Some(byte) = try!(self.fetch_byte()) {
+        while let Some(result) = self.buf.next() {
+            let byte = try!(result);
+
             match self.state {
                 DecoderState::Clean => {
                     self.state = DecoderState::Single(byte);
@@ -272,41 +261,16 @@ impl<R: Read> Decoder<R> {
     fn is_final_run_byte(byte: u8) -> bool {
         0b1000_0000 & byte != 0
     }
-
-    fn fill_buf(&mut self) -> io::Result<()> {
-        let mut buf = [0u8; 32];
-        let bytes_read = try!(self.r.read(&mut buf));
-
-        for &byte in &buf[..bytes_read] {
-            self.buf.push_back(byte);
-        }
-
-        Ok(())
-    }
-
-    fn fetch_byte(&mut self) -> io::Result<Option<u8>> {
-        match self.buf.pop_front() {
-            Some(byte) => Ok(Some(byte)),
-            None => {
-                try!(self.fill_buf());
-
-                match self.buf.pop_front() {
-                    None => Ok(None),
-                    Some(byte) => Ok(Some(byte))
-                }
-            }
-        }
-    }
 }
 
 impl<R: Read> Read for Decoder<R> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         let mut bytes_read = 0;
 
-        for _ in 0..buf.len() {
+        for slot in buf {
             match try!(self.read_byte()) {
-                Some(b) => buf[bytes_read] = b,
-                None => return Ok(bytes_read)
+                Some(b) => *slot = b,
+                None => break
             }
 
             bytes_read += 1;
@@ -322,6 +286,7 @@ mod test {
     use super::super::rand::{OsRng, Rng};
     use std::io::{Write, Read};
     use std::iter::{Iterator, repeat};
+    use test;
 
     fn test_encode(input: &[u8], output: &[u8]) {
         let mut encoder = Encoder::new(Vec::new());
