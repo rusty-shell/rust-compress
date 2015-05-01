@@ -25,11 +25,11 @@ The following algorithms are alredy implemented in the main branch:
 * BWT (Burrows-Wheeler Transform): straightforward encoder, standard decoder
 * DC (Distance Coding): basic encoder, standard decoder
 * Ari (Arithmetic coding): standard range encoder/decoder
+* RLE (Run-Length Encoding): basic encoder/decoder
 
 ### Desired Algorithms
 
 The following algorithms are either planned or in development at this point:
 
-* RLE (Run-Length Encoding)
 * WFC (Weight-Frequency Coding)
 * SA/BWT in linear time

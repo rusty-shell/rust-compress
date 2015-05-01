@@ -46,6 +46,9 @@ pub mod entropy {
     pub mod ari;
 }
 
+#[cfg(feature="rle")]
+pub mod rle;
+
 fn byteorder_err_to_io(err: byteorder::Error) -> io::Error {
     match err {
         byteorder::Error::Io(e) => e,
