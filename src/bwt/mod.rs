@@ -52,7 +52,7 @@ This is an original (mostly trivial) implementation.
 
 extern crate num;
 
-use std::{cmp, fmt, slice};
+use std::{cmp, fmt, intrinsics, slice};
 use std::iter::{self, Extend, repeat};
 use std::io::{self, Read, Write};
 use self::num::traits::{NumCast, ToPrimitive};
@@ -121,8 +121,8 @@ impl Radix  {
     /// allows the offsets to be re-used after all positions are obtained
     pub fn shift(&mut self) {
         assert_eq!( self.freq[ALPHABET_SIZE-1], self.freq[ALPHABET_SIZE] );
-        for i in iter::range_inclusive(1,ALPHABET_SIZE).rev()   {
-            self.freq[i] = self.freq[i-1];
+        for i in (0 .. ALPHABET_SIZE).rev()   {
+            self.freq[i+1] = self.freq[i];
         }
         self.freq[0] = 0;
     }
@@ -157,9 +157,7 @@ pub fn compute_suffixes<SUF: NumCast + ToPrimitive + fmt::Debug>(input: &[Symbol
         let slice = &mut suf_array[lo..hi];
         debug!("\tsorting group [{}-{}) for symbol {}", lo, hi, i);
         slice.sort_by(|a,b| {
-            iter::order::cmp(
-                input[(a.to_usize().unwrap())..].iter(),
-                input[(b.to_usize().unwrap())..].iter())
+            input[(a.to_usize().unwrap())..].cmp(&input[(b.to_usize().unwrap())..])
         });
     }
 
@@ -419,10 +417,11 @@ impl<R: Read> Read for Decoder<R> {
                 }
             }
             let n = cmp::min(amt, self.output.len() - self.start);
-            slice::bytes::copy_memory(
-                &self.output[self.start..(self.start + n)],
-                &mut dst[(dst_len - amt)..]
-            );
+            unsafe { intrinsics::copy_nonoverlapping(
+                &self.output[self.start],
+                &mut dst[dst_len - amt],
+                n,
+            )};
             self.start += n;
             amt -= n;
         }
@@ -497,7 +496,7 @@ impl<W: Write> Write for Encoder<W> {
 
         while buf.len() > 0 {
             let amt = cmp::min( self.block_size - self.buf.len(), buf.len() );
-            self.buf.push_all(&buf[..amt]);
+            self.buf.extend(buf[..amt].iter().map(|b| *b));
 
             if self.buf.len() == self.block_size {
                 try!(self.encode_block());
@@ -521,9 +520,9 @@ impl<W: Write> Write for Encoder<W> {
 #[cfg(test)]
 mod test {
     use std::io::{BufReader, BufWriter, Read, Write};
-    use std::iter::repeat;
+    #[cfg(feature="unstable")]
     use test::Bencher;
-    use super::{encode, decode, Decoder, Encoder};
+    use super::{Decoder, Encoder};
 
     fn roundtrip(bytes: &[u8], extra_mem: bool) {
         let mut e = Encoder::new(BufWriter::new(Vec::new()), 1<<10);
@@ -550,8 +549,12 @@ mod test {
         roundtrip(b"abracadabra", false);
     }
 
+    #[cfg(feature="unstable")]
     #[bench]
     fn decode_speed(bh: &mut Bencher) {
+        use std::iter::repeat;
+        use super::{encode, decode};
+
         let input = include_bytes!("../data/test.txt");
         let n = input.len();
         let mut suf: Vec<u16> = repeat(0).take(n).collect();
@@ -560,6 +563,7 @@ mod test {
             let out: Vec<u8> = to_iter.by_ref().collect();
             (out, to_iter.get_origin())
         };
+
         bh.iter(|| {
             let from_iter = decode(&output[..], origin, &mut suf[..]);
             from_iter.last().unwrap();

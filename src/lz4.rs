@@ -27,9 +27,9 @@ can be found at https://github.com/bkaradzic/go-lz4.
 */
 
 use std::cmp;
+use std::intrinsics::copy_nonoverlapping;
 use std::io::{self, Read, Write};
 use std::iter::repeat;
-use std::slice;
 use std::vec::Vec;
 use std::num::Wrapping;
 use std::ops::Shr;
@@ -72,12 +72,17 @@ impl<'a> BlockDecoder<'a> {
             {
                 let len = self.length(code >> 4);
                 debug!("consume len {}", len);
-                let end = self.end;
-                self.grow_output(end + len);
-                slice::bytes::copy_memory(&self.input[self.cur..(self.cur + len)],
-                                          &mut self.output[end..]);
-                self.end += len;
-                self.cur += len;
+                if len > 0 {
+                    let end = self.end;
+                    self.grow_output(end + len);
+                    unsafe { copy_nonoverlapping(
+                        &self.input[self.cur],
+                        &mut self.output[end],
+                        len
+                    )};
+                    self.end += len;
+                    self.cur += len;
+                }
             }
             if self.cur == self.input.len() { break }
 
@@ -101,7 +106,7 @@ impl<'a> BlockDecoder<'a> {
                 self.cp(len, 0);
             }
         }
-        return self.end;
+        self.end
     }
 
     fn length(&mut self, code: u8) -> usize {
@@ -113,13 +118,13 @@ impl<'a> BlockDecoder<'a> {
                 if tmp != 0xff { break }
             }
         }
-        return ret;
+        ret
     }
 
     fn bump(&mut self) -> u8 {
         let ret = self.input[self.cur];
         self.cur += 1;
-        return ret;
+        ret
     }
 
     #[inline]
@@ -142,11 +147,16 @@ impl<'a> BlockDecoder<'a> {
     #[inline]
     fn grow_output(&mut self, target: usize) {
         if self.output.capacity() < target {
-            debug!("growing {} to {}", self.output.capacity(), target);
-            self.output.reserve(target);
-        }
-        unsafe {
-            self.output.set_len(target);
+            println!("growing {} to {}", self.output.capacity(), target);
+            //let additional = target - self.output.capacity();
+            //self.output.reserve(additional);
+            while self.output.len() < target {
+                self.output.push(0);
+            }
+        }else {
+            unsafe {
+               self.output.set_len(target);
+            }
         }
     }
 }
@@ -473,8 +483,11 @@ impl<R: Read> Read for Decoder<R> {
                 }
             }
             let n = cmp::min(amt, self.end - self.start);
-            slice::bytes::copy_memory(&self.output[self.start..(self.start + n)],
-                                      &mut dst[(len - amt)..]);
+            unsafe { copy_nonoverlapping(
+                &self.output[self.start],
+                &mut dst[len - amt],
+                n
+            )};
             self.start += n;
             amt -= n;
         }
@@ -561,7 +574,7 @@ impl<W: Write> Write for Encoder<W> {
 
         while buf.len() > 0 {
             let amt = cmp::min(self.limit - self.buf.len(), buf.len());
-            self.buf.push_all(&buf[..amt]);
+            self.buf.extend(buf[..amt].iter().map(|b| *b));
 
             if self.buf.len() == self.limit {
                 try!(self.encode_block());
@@ -615,6 +628,7 @@ mod test {
     use std::io::{BufReader, BufWriter, Read, Write};
     use super::super::rand;
     use super::{Decoder, Encoder};
+    #[cfg(feature="unstable")]
     use test;
 
     use super::super::byteorder::ReadBytesExt;
@@ -680,7 +694,7 @@ mod test {
             match d.read(&mut buf[..(1 + rand::random::<usize>() % 40)]) {
                 Ok(0) => break,
                 Ok(n) => {
-                    out.push_all(&buf[..n]);
+                    out.extend(buf[..n].iter().map(|b| *b));
                 }
                 Err(..) => break
             }
@@ -708,6 +722,7 @@ mod test {
         roundtrip(include_bytes!("data/test.txt"));
     }
 
+    #[cfg(feature="unstable")]
     #[bench]
     fn decompress_speed(bh: &mut test::Bencher) {
         let input = include_bytes!("data/test.lz4.9");

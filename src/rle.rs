@@ -286,6 +286,7 @@ mod test {
     use super::super::rand::{OsRng, Rng};
     use std::io::{Write, Read};
     use std::iter::{Iterator, repeat};
+    #[cfg(feature="unstable")]
     use test;
 
     fn test_encode(input: &[u8], output: &[u8]) {
@@ -364,6 +365,7 @@ mod test {
     // initial speed: 145 MB/s
     // after moving check to write: 145 MB/s
 
+    #[cfg(feature="unstable")]
     #[bench]
     fn compress_speed(bh: &mut test::Bencher) {
         let input = include_bytes!("data/test.txt");
@@ -382,6 +384,7 @@ mod test {
     // after using a byte iterator on a BufReader: 20 MB/s
     // after using a byte iterator on the raw read object: 80 MB/s
 
+    #[cfg(feature="unstable")]
     #[bench]
     fn decompress_speed(bh: &mut test::Bencher) {
         let input = include_bytes!("data/test.txt");

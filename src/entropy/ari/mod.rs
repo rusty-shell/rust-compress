@@ -83,7 +83,7 @@ impl RangeEncoder {
         debug_assert!(max_range > (SYMBOL_TOTAL as Border));
         RangeEncoder {
             low: 0,
-            hai: -1,
+            hai: !0,
             threshold: max_range,
             bits_lost_on_threshold_cut: 0.0,
             bits_lost_on_division: 0.0,
@@ -93,7 +93,7 @@ impl RangeEncoder {
     /// Reset the current range
     pub fn reset(&mut self) {
         self.low = 0;
-        self.hai = -1;
+        self.hai = !0;
     }
 
     #[cfg(tune)]

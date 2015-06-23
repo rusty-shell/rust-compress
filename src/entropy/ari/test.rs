@@ -1,5 +1,6 @@
-use std::io::{BufReader, BufWriter, Write, Read, Seek, SeekFrom, Cursor};
+use std::io::{BufReader, BufWriter, Write, Read};
 use std::vec::Vec;
+#[cfg(feature="unstable")]
 use test::Bencher;
 
 static TEXT_INPUT: &'static [u8] = include_bytes!("../../data/test.txt");
@@ -210,8 +211,10 @@ fn roundtrips_apm() {
     roundtrip_apm(b"abracadabra");
 }
 
+#[cfg(feature="unstable")]
 #[bench]
 fn compress_speed(bh: &mut Bencher) {
+    use std::io::{Seek, SeekFrom, Cursor};
     let mut storage: Vec<u8> = vec![0u8; TEXT_INPUT.len()];
     bh.iter(|| {
         let cursor = Cursor::new(&mut storage[..]);
