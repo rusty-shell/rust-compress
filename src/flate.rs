@@ -25,8 +25,8 @@
 //!   Much of this code is based on the puff.c implementation found here
 
 use std::cmp;
+use std::intrinsics::copy_nonoverlapping;
 use std::io::{self, Read};
-use std::slice;
 use std::vec::Vec;
 
 use super::byteorder::{LittleEndian, ReadBytesExt};
@@ -213,16 +213,22 @@ impl<R: Read> Decoder<R> {
         let remaining = HISTORY - self.outpos;
         let n = cmp::min(amt, remaining);
         if self.output.len() < HISTORY {
-            self.output.push_all(&self.block[from..(from + n)]);
-        } else {
+            self.output.extend(self.block[from..(from + n)].iter().map(|b| *b));
+        } else if n > 0 {
             assert_eq!(self.output.len(), HISTORY);
-            slice::bytes::copy_memory(&self.block[from..(from + n)],
-                                      &mut self.output[self.outpos..]);
+            unsafe { copy_nonoverlapping(
+                &self.block[from],
+                &mut self.output[self.outpos],
+                n
+            )};
         }
         self.outpos += n;
         if n < amt {
-            slice::bytes::copy_memory(&self.block[(from + n)..],
-                                      &mut self.output[..]);
+            unsafe { copy_nonoverlapping(
+                &self.block[from+n],
+                &mut self.output[0],
+                amt - n
+            )};
             self.outpos = amt - n;
         }
     }
@@ -465,8 +471,11 @@ impl<R: Read> Read for Decoder<R> {
             try!(self.block());
         }
         let n = cmp::min(buf.len(), self.block.len() - self.pos);
-        slice::bytes::copy_memory(&self.block[self.pos..(self.pos + n)],
-                                  &mut buf[..n]);
+        unsafe { copy_nonoverlapping(
+            &self.block[self.pos],
+            &mut buf[0],
+            n
+        )};
         self.pos += n;
         Ok(n)
     }
@@ -480,6 +489,7 @@ mod test {
     use super::super::byteorder::{LittleEndian, BigEndian, WriteBytesExt, ReadBytesExt};
     use std::str;
     use super::{Decoder};
+    #[cfg(feature="unstable")]
     use test;
 
     // The input data for these tests were all generated from the zpipe.c
@@ -495,7 +505,8 @@ mod test {
         d.read_to_end(&mut buf).unwrap();
 
         assert_eq!(output.len(), buf.len());
-        assert!(&buf[..] == output);
+        let i = buf.iter().zip(output.iter()).position(|(a, b)| a != b);
+        assert!(buf == output);
     }
 
     #[test]
@@ -546,7 +557,7 @@ mod test {
             match d.read(&mut buf[..(1 + random::<usize>() % 40)]) {
                 Err(..) | Ok(0) => break,
                 Ok(n) => {
-                    out.push_all(&buf[..n]);
+                    out.extend(buf[..n].iter().map(|b| *b));
                 }
             }
         }
@@ -570,6 +581,7 @@ mod test {
     //    roundtrip(include_bytes!("data/test.txt"));
     //}
 
+    #[cfg(feature="unstable")]
     #[bench]
     fn decompress_speed(bh: &mut test::Bencher) {
         let input = include_bytes!("data/test.z.9");

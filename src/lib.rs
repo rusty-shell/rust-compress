@@ -1,8 +1,5 @@
-#![crate_name = "compress"]
 #![deny(missing_docs)]
 #![allow(missing_copy_implementations)]
-#![feature(negate_unsigned, convert, core, collections)]
-#![cfg_attr(test, feature(test))]
 
 //! dox (placeholder)
 
@@ -12,7 +9,9 @@ extern crate rand;
 #[macro_use]
 extern crate log;
 
-#[cfg(test)] extern crate test;
+#[cfg(test)]
+#[cfg(feature="unstable")]
+extern crate test;
 
 use std::io::{self, Read};
 

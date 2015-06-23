@@ -133,6 +133,7 @@ mod test {
     use super::super::byteorder::{LittleEndian, BigEndian, WriteBytesExt, ReadBytesExt};
     use std::str;
     use super::{Decoder};
+    #[cfg(feature="unstable")]
     use test;
 
     fn test_decode(input: &[u8], output: &[u8]) {
@@ -193,7 +194,7 @@ mod test {
             match d.read(&mut buf[..(1 + random::<usize>() % 40)]) {
                 Ok(0) | Err(..) => break,
                 Ok(n) => {
-                    out.push_all(&buf[..n]);
+                    out.extend(buf[..n].iter().map(|b| *b));
                 }
             }
         }
@@ -217,6 +218,7 @@ mod test {
     //    roundtrip(include_bytes!("data/test.txt"));
     //}
 
+    #[cfg(feature="unstable")]
     #[bench]
     fn decompress_speed(bh: &mut test::Bencher) {
         let input = include_bytes!("data/test.z.9");

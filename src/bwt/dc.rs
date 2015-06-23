@@ -153,7 +153,7 @@ pub fn encode<'a, 'b, D: Clone + Copy + Eq + NumCast>(input: &'a [Symbol], dista
 pub fn encode_simple<D: Clone + Copy + Eq + NumCast>(input: &[Symbol]) -> Vec<D> {
     let n = input.len();
     let mut raw_dist: Vec<D> = repeat(NumCast::from(0).unwrap()).take(n).collect();
-    let mut eniter = encode(input, raw_dist.as_mut_slice(), &mut MTF::new());
+    let mut eniter = encode(input, &mut raw_dist, &mut MTF::new());
     let init: Vec<D> = (0..TOTAL_SYMBOLS).map(|i| NumCast::from(eniter.get_init()[i]).unwrap()).collect();
     init.iter().map(|d| d.clone()).chain(eniter.by_ref().map(|(d,_)| d)).collect()
 }

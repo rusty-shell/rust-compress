@@ -30,7 +30,7 @@ let result = d.read_to_end(&mut decoded).unwrap();
 
 */
 
-use std::{iter, mem};
+use std::mem;
 use std::io::{self, Read, Write};
 
 use super::super::byteorder::{self, WriteBytesExt, ReadBytesExt};
@@ -82,8 +82,8 @@ impl MTF {
     pub fn decode(&mut self, rank: Rank) -> Symbol {
         let sym = self.symbols[rank as usize];
         debug!("\tDecoding rank {} with symbol {}", rank, sym);
-        for i in iter::range_inclusive(1,rank as usize).rev() {
-            self.symbols[i] = self.symbols[i-1];
+        for i in (0 .. rank as usize).rev() {
+            self.symbols[i+1] = self.symbols[i];
         }
         self.symbols[0] = sym;
         sym
@@ -172,6 +172,7 @@ impl<R: Read> Read for Decoder<R> {
 #[cfg(test)]
 mod test {
     use std::io::{self, Read, Write};
+    #[cfg(feature="unstable")]
     use test::Bencher;
     use super::{Encoder, Decoder};
 
@@ -195,6 +196,7 @@ mod test {
         roundtrip(include_bytes!("../data/test.txt"));
     }
 
+    #[cfg(feature="unstable")]
     #[bench]
     fn encode_speed(bh: &mut Bencher) {
         let vec = Vec::new();
@@ -207,6 +209,7 @@ mod test {
         bh.bytes = input.len() as u64;
     }
 
+    #[cfg(feature="unstable")]
     #[bench]
     fn decode_speed(bh: &mut Bencher) {
         let vec = Vec::new();

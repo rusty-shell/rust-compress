@@ -1,7 +1,7 @@
 [package]
 
 name = "compress"
-version = "0.0.1"
+version = "0.1.0"
 authors = ["Alex Crichton <alex@alexcrichton.com>",
            "Dzmitry Malyshau <kvarkus@gmail.com>"]
 license = "MIT/Apache-2.0"
@@ -15,13 +15,14 @@ flate = []
 lz4 = []
 zlib = []
 rle = []
+unstable = []
 
 [[bin]]
 name = "compress"
 doc = false
 
 [dependencies]
-log = "0.2.2"
-num = "0.1"
+log = "*"
+num = "*"
 rand = "*"
 byteorder = "*"
