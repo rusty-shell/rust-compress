@@ -25,7 +25,7 @@
 //!   Much of this code is based on the puff.c implementation found here
 
 use std::cmp;
-use std::intrinsics::copy_nonoverlapping;
+use std::ptr::copy_nonoverlapping;
 use std::io::{self, Read};
 use std::vec::Vec;
 

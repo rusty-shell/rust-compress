@@ -52,7 +52,8 @@ This is an original (mostly trivial) implementation.
 
 extern crate num;
 
-use std::{cmp, fmt, intrinsics, slice};
+use std::{cmp, fmt, slice};
+use std::ptr;
 use std::iter::{self, Extend, repeat};
 use std::io::{self, Read, Write};
 use self::num::traits::{NumCast, ToPrimitive};
@@ -276,7 +277,7 @@ impl<'a, SUF: ToPrimitive> Iterator for InverseIterator<'a, SUF> {
             };
 
             Some(self.input[p])
-        }   
+        }
     }
 }
 
@@ -417,7 +418,7 @@ impl<R: Read> Read for Decoder<R> {
                 }
             }
             let n = cmp::min(amt, self.output.len() - self.start);
-            unsafe { intrinsics::copy_nonoverlapping(
+            unsafe { ptr::copy_nonoverlapping(
                 &self.output[self.start],
                 &mut dst[dst_len - amt],
                 n,

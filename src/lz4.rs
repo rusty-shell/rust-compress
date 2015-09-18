@@ -27,7 +27,7 @@ can be found at https://github.com/bkaradzic/go-lz4.
 */
 
 use std::cmp;
-use std::intrinsics::copy_nonoverlapping;
+use std::ptr::copy_nonoverlapping;
 use std::io::{self, Read, Write};
 use std::iter::repeat;
 use std::vec::Vec;
