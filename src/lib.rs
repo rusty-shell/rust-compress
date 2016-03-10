@@ -48,10 +48,11 @@ pub mod entropy {
 #[cfg(feature="rle")]
 pub mod rle;
 
+#[cfg(any(feature = "lz4", feature = "entropy", feature = "bwt"))]
 fn byteorder_err_to_io(err: byteorder::Error) -> io::Error {
     match err {
         byteorder::Error::Io(e) => e,
-        byteorder::Error::UnexpectedEOF => 
+        byteorder::Error::UnexpectedEOF =>
             io::Error::new(
                 io::ErrorKind::Other,
                 "unexpected end of file"
