@@ -471,13 +471,18 @@ impl<R: Read> Read for Decoder<R> {
             try!(self.block());
         }
         let n = cmp::min(buf.len(), self.block.len() - self.pos);
-        unsafe { copy_nonoverlapping(
-            &self.block[self.pos],
-            &mut buf[0],
-            n
-        )};
-        self.pos += n;
-        Ok(n)
+        match n {
+            0 => Ok(0),
+            _ => {
+                unsafe { copy_nonoverlapping(
+                    &self.block[self.pos],
+                    &mut buf[0],
+                    n
+                )};
+                self.pos += n;
+                Ok(n)
+            }
+        }
     }
 }
 
@@ -509,6 +514,16 @@ mod test {
         assert!(buf == output);
     }
 
+    fn test_decode_pure(input: &[u8], output: &[u8]) {
+        let mut d = Decoder::new(BufReader::new(input));
+        let mut buf = Vec::new();
+        d.read_to_end(&mut buf).unwrap();
+
+        assert_eq!(output.len(), buf.len());
+        let i = buf.iter().zip(output.iter()).position(|(a, b)| a != b);
+        assert!(buf == output);
+    }
+
     #[test]
     fn decode() {
         let reference = include_bytes!("data/test.txt");
@@ -522,6 +537,7 @@ mod test {
         test_decode(include_bytes!("data/test.z.7"), reference);
         test_decode(include_bytes!("data/test.z.8"), reference);
         test_decode(include_bytes!("data/test.z.9"), reference);
+        test_decode_pure(include_bytes!("data/test.z.go"), reference);
     }
 
     #[test]
