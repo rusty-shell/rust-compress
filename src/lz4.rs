@@ -147,7 +147,7 @@ impl<'a> BlockDecoder<'a> {
     #[inline]
     fn grow_output(&mut self, target: usize) {
         if self.output.capacity() < target {
-            println!("growing {} to {}", self.output.capacity(), target);
+            debug!("growing {} to {}", self.output.capacity(), target);
             //let additional = target - self.output.capacity();
             //self.output.reserve(additional);
             while self.output.len() < target {
