@@ -229,9 +229,12 @@ impl<'a> BlockEncoder<'a> {
         match compression_bound(input_len) {
             None => 0,
             Some(out_size) => {
-                let additional = out_size as usize - self.output.capacity();
-                self.output.reserve(additional);
-                unsafe {self.output.set_len(out_size as usize); }
+                let out_size_usize = out_size as usize;
+                if self.output.capacity() < out_size_usize {
+                    let additional = out_size_usize - self.output.capacity();
+                    self.output.reserve(additional);
+                }
+                unsafe {self.output.set_len(out_size_usize); }
 
                 let mut step = 1u32;
                 let mut limit = INCOMPRESSIBLE;
