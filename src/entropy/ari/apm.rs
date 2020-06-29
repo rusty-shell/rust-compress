@@ -15,7 +15,7 @@ Matt Mahoney for the wonderful 'bbb' commented source
 
 extern crate num;
 
-use self::num::traits::{Float, ToPrimitive};
+use self::num::traits::{ToPrimitive};
 use super::Border;
 pub type FlatProbability = u16;
 pub type WideProbability = i16;

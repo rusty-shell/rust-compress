@@ -164,7 +164,7 @@ impl<R: Read> Read for Decoder<R> {
             bytes_read += 1;
             *sym = self.mtf.decode(rank);
         }
-        Ok((bytes_read))
+        Ok(bytes_read)
     }
 }
 
