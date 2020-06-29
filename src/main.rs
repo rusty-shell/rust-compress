@@ -34,7 +34,7 @@ impl Config {
             block_size: 1<<16,
             decompress: false,
         };
-        let mut handlers: HashMap<&str, Box<FnMut(&str, &mut Config)>> =
+        let mut handlers: HashMap<&str, Box<dyn FnMut(&str, &mut Config)>> =
             HashMap::new();
         handlers.insert("d", Box::new(|_, cfg| { cfg.decompress = true; }));
         handlers.insert("block", Box::new(|b, cfg| {
@@ -57,10 +57,10 @@ impl Config {
 }
 
 struct Pass {
-    encode: Box<FnMut(Box<Write + 'static>, &Config)
-                      -> Box<Write + 'static> + 'static>,
-    decode: Box<FnMut(Box<Read + 'static>, &Config)
-                      -> Box<Read + 'static> + 'static>,
+    encode: Box<dyn FnMut(Box<dyn Write + 'static>, &Config)
+                      -> Box<dyn Write + 'static> + 'static>,
+    decode: Box<dyn FnMut(Box<dyn Read + 'static>, &Config)
+                      -> Box<dyn Read + 'static> + 'static>,
     info: String,
 }
 
@@ -75,28 +75,28 @@ pub fn main() {
     });
     passes.insert("ari".to_string(), Pass {
         encode: Box::new(|w,_c| {
-            Box::new(ari::ByteEncoder::new(w)) as Box<Write + 'static>
+            Box::new(ari::ByteEncoder::new(w)) as Box<dyn Write + 'static>
         }),
         decode: Box::new(|r,_c| {
-            Box::new(ari::ByteDecoder::new(r)) as Box<Read + 'static>
+            Box::new(ari::ByteDecoder::new(r)) as Box<dyn Read + 'static>
         }),
         info: "Adaptive arithmetic byte coder".to_string(),
     });
     passes.insert("bwt".to_string(), Pass {
         encode: Box::new(|w,c| {
-            Box::new(bwt::Encoder::new(w, c.block_size)) as Box<Write + 'static>
+            Box::new(bwt::Encoder::new(w, c.block_size)) as Box<dyn Write + 'static>
         }),
         decode: Box::new(|r,_c| {
-            Box::new(bwt::Decoder::new(r, true)) as Box<Read + 'static>
+            Box::new(bwt::Decoder::new(r, true)) as Box<dyn Read + 'static>
         }),
         info: "Burrows-Wheeler Transformation".to_string(),
     });
     passes.insert("mtf".to_string(), Pass {
         encode: Box::new(|w,_c| {
-            Box::new(bwt::mtf::Encoder::new(w)) as Box<Write + 'static>
+            Box::new(bwt::mtf::Encoder::new(w)) as Box<dyn Write + 'static>
         }),
         decode: Box::new(|r,_c| {
-            Box::new(bwt::mtf::Decoder::new(r)) as Box<Read + 'static>
+            Box::new(bwt::mtf::Decoder::new(r)) as Box<dyn Read + 'static>
         }),
         info: "Move-To-Front Transformation".to_string(),
     });
@@ -112,10 +112,10 @@ pub fn main() {
     });*/
     passes.insert("lz4".to_string(), Pass {
         encode: Box::new(|w,_c| {
-            Box::new(lz4::Encoder::new(w)) as Box<Write + 'static>
+            Box::new(lz4::Encoder::new(w)) as Box<dyn Write + 'static>
         }),
         decode: Box::new(|r,_c| { // LZ4 decoder seem to work
-            Box::new(lz4::Decoder::new(r)) as Box<Read + 'static>
+            Box::new(lz4::Decoder::new(r)) as Box<dyn Read + 'static>
         }),
         info: "Ziv-Lempel derivative, focused at speed".to_string(),
     });
@@ -142,7 +142,7 @@ pub fn main() {
             input.push_exactly(len, &mut bytes).unwrap();
             str::from_utf8(&bytes[..]).unwrap().to_string()
         }).collect();
-        let mut rsum: Box<Read> = Box::new(input);
+        let mut rsum: Box<dyn Read> = Box::new(input);
         for met in methods.iter() {
             info!("Found pass {}", *met);
             match passes.get_mut(met) {
@@ -169,7 +169,7 @@ pub fn main() {
             output.write_u8(met.len() as u8).unwrap();
             output.write_all(met.as_bytes()).unwrap();
         }
-        let mut wsum: Box<Write> = Box::new(output);
+        let mut wsum: Box<dyn Write> = Box::new(output);
         for met in config.methods.iter() {
             match passes.get_mut(met) {
                 Some(pa) => wsum = (pa.encode)(wsum, &config),
