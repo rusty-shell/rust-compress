@@ -1,5 +1,6 @@
 #![deny(missing_docs)]
 #![allow(missing_copy_implementations)]
+#![allow(deprecated)]
 
 //! dox (placeholder)
 
