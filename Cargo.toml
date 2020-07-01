@@ -24,7 +24,7 @@ name = "compress"
 doc = false
 
 [dependencies]
-log = "0.3"
-num = "0.1"
+log = "0.4"
+num = "0.3"
 rand = "0.7"
 byteorder = "0.4"
