@@ -26,5 +26,5 @@ doc = false
 [dependencies]
 log = "0.3"
 num = "0.1"
-rand = "0.3"
+rand = "0.7"
 byteorder = "0.4"

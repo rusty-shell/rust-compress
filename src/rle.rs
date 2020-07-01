@@ -283,7 +283,7 @@ impl<R: Read> Read for Decoder<R> {
 #[cfg(test)]
 mod test {
     use super::{Decoder, Encoder};
-    use super::super::rand::{OsRng, Rng};
+    use super::super::rand::{RngCore,rngs::OsRng};
     use std::io::{Write, Read};
     use std::iter::{Iterator, repeat};
     #[cfg(feature="unstable")]
@@ -353,11 +353,9 @@ mod test {
 
     #[test]
     fn random_roundtrips() {
-        let mut rng = OsRng::new().unwrap();
-
         for _ in 0..100 {
             let mut buf = [0; 13579];
-            rng.fill_bytes(&mut buf[..]);
+            OsRng.fill_bytes(&mut buf[..]);
             test_roundtrip(&buf);
         }
     }

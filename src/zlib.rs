@@ -129,7 +129,7 @@ impl<R: Read> Read for Decoder<R> {
 #[allow(warnings)]
 mod test {
     use std::io::{BufReader, BufWriter, Read, Write};
-    use super::super::rand::{random, Rand};
+    use super::super::rand::{random};
     use super::super::byteorder::{LittleEndian, BigEndian, WriteBytesExt, ReadBytesExt};
     use std::str;
     use super::{Decoder};
