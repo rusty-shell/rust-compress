@@ -33,7 +33,7 @@ let result = d.read_to_end(&mut decoded).unwrap();
 use std::mem;
 use std::io::{self, Read, Write};
 
-use super::super::byteorder::{self, WriteBytesExt, ReadBytesExt};
+use super::super::byteorder::{WriteBytesExt, ReadBytesExt};
 
 pub type Symbol = u8;
 pub type Rank = u8;
@@ -158,8 +158,8 @@ impl<R: Read> Read for Decoder<R> {
         for sym in dst.iter_mut() {
             let rank = match self.r.read_u8() {
                 Ok(r) => r,
-                Err(byteorder::Error::UnexpectedEOF) => break,
-                Err(byteorder::Error::Io(e)) => return Err(e)
+                Err(ref e) if e.kind() == io::ErrorKind::UnexpectedEof => break,
+                Err(e) => return Err(e)
             };
             bytes_read += 1;
             *sym = self.mtf.decode(rank);

@@ -49,16 +49,59 @@ pub mod entropy {
 pub mod rle;
 
 #[cfg(any(feature = "lz4", feature = "entropy", feature = "bwt"))]
-fn byteorder_err_to_io(err: byteorder::Error) -> io::Error {
+fn byteorder_err_to_io(err: io::Error) -> io::Error {
     match err {
-        byteorder::Error::Io(e) => e,
-        byteorder::Error::UnexpectedEOF =>
+        e if e.kind() == io::ErrorKind::UnexpectedEof =>
             io::Error::new(
                 io::ErrorKind::Other,
                 "unexpected end of file"
-            )
+            ),
+        e => e,
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::{io,byteorder_err_to_io};
+    #[cfg(feature="unstable")]
+    use test;
+    
+    fn force_byteorder_eof_error()->io::Result<u64>{
+        use byteorder::{BigEndian,ReadBytesExt};
+        let mut rdr = io::Cursor::new(vec![1,2]);
+        rdr.read_u64::<BigEndian>()
+    }
+    
+    #[test]
+    fn byteorder_err_to_io_with_eof() {
+    
+        let err_from_byteorder = force_byteorder_eof_error().unwrap_err();
+        let err = byteorder_err_to_io(err_from_byteorder);
+        
+        let err_expected = io::Error::new(
+            io::ErrorKind::Other,
+            "unexpected end of file"
+        );
+        assert_eq!(err.kind(),err_expected.kind());
+    }
+    
+    #[test]
+    fn byteorder_err_to_io_with_not_eof() {
+   
+        // using closure here to produce 2x the same error,
+        // as io::Error does not impl Copy trait
+        let build_other_io_error = || io::Error::new(
+            io::ErrorKind::NotFound,
+            "some other io error"
+        );
+         
+        let err = byteorder_err_to_io(build_other_io_error());
+        let err_expected = build_other_io_error();
+        
+        assert_eq!(err.kind(),err_expected.kind());
+    }
+}
+
 
 /// Adds a convenience method for types with the read trait, very similar
 /// to push_at_least in the late Reader trait

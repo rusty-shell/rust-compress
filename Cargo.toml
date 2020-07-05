@@ -27,4 +27,4 @@ doc = false
 log = "0.4"
 num = "0.3"
 rand = "0.7"
-byteorder = "0.4"
+byteorder = "1.3"
