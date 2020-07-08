@@ -58,7 +58,7 @@ use std::iter::{self, Extend, repeat};
 use std::io::{self, Read, Write};
 use self::num::traits::{NumCast, ToPrimitive};
 
-use super::byteorder::{self, LittleEndian, WriteBytesExt, ReadBytesExt};
+use super::byteorder::{LittleEndian, WriteBytesExt, ReadBytesExt};
 use super::{byteorder_err_to_io, ReadExact};
 
 pub mod dc;
@@ -373,8 +373,8 @@ impl<R: Read> Decoder<R> {
     fn decode_block(&mut self) -> io::Result<bool> {
         let n = match self.r.read_u32::<LittleEndian>() {
             Ok(n) => n as usize,
-            Err(byteorder::Error::Io(e)) => return Err(e),
-            Err(..) => return Ok(false) // EOF
+            Err(ref e) if e.kind() == io::ErrorKind::UnexpectedEof => return Ok(false), // EOF
+            Err(e) => return Err(e),
         };
 
         self.temp.truncate(0);
