@@ -5,7 +5,7 @@ rust:
 script:
 - cargo build --verbose
 - cargo test --verbose
-- rustdoc --test src/lib.rs -L target
+- rustdoc --test src/lib.rs -L target -L dependency=target/debug/deps --extern byteorder=target/debug/deps/libbyteorder-7b8e532639ee0fad.rlib --extern rand=target/debug/deps/libgetrandom-233159f4d6fdd5d9.rlib --extern log=target/debug/deps/liblog-dd0cc9f7ce37032a.rlib           
 - cargo doc
 after_success: ! '[ $TRAVIS_BRANCH = master ] && [ $TRAVIS_PULL_REQUEST = false ]
   && echo ''<meta http-equiv=refresh content=0;url=compress/index.html>'' > target/doc/index.html
