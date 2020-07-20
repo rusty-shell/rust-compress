@@ -12,7 +12,7 @@
 //!
 //! let stream = File::open(&Path::new("path/to/file.flate")).unwrap();
 //! let mut decompressed = Vec::new();
-//! lib::Decoder::new(stream).read_to_end(&mut decompressed);
+//! zlib::Decoder::new(stream).read_to_end(&mut decompressed);
 //! ```
 //!
 //! # Related links
