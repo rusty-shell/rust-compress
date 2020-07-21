@@ -9,8 +9,9 @@
 //! use compress::zlib;
 //! use std::fs::File;
 //! use std::path::Path;
+//! use std::io::Read;
 //!
-//! let stream = File::open(&Path::new("path/to/file.flate")).unwrap();
+//! let stream = File::open(&Path::new("path/to/file.zlib")).unwrap();
 //! let mut decompressed = Vec::new();
 //! zlib::Decoder::new(stream).read_to_end(&mut decompressed);
 //! ```

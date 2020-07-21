@@ -9,6 +9,7 @@
 //! use compress::flate;
 //! use std::fs::File;
 //! use std::path::Path;
+//! use std::io::Read;
 //!
 //! let stream = File::open(&Path::new("path/to/file.flate")).unwrap();
 //! let mut decompressed = Vec::new();
